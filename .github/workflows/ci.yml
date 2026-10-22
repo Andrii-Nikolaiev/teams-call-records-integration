@@ -10,6 +10,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - run: dotnet restore
-      - run: dotnet build --no-restore -c Release
-      - run: dotnet test --no-build -c Release --verbosity normal
+      - run: dotnet restore tests/TeamsCallRecords.Core.Tests/TeamsCallRecords.Core.Tests.csproj
+      - run: dotnet build --no-restore -c Release tests/TeamsCallRecords.Core.Tests/TeamsCallRecords.Core.Tests.csproj
+      - run: dotnet test --no-build -c Release --verbosity normal tests/TeamsCallRecords.Core.Tests/TeamsCallRecords.Core.Tests.csproj
