@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TeamsCallRecords.Core/TeamsCallRecords.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TeamsCallRecords.Core.Tests/TeamsCallRecords.Core.Tests.csproj" />
+  </Folder>
+</Solution>
