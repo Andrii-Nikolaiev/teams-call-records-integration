@@ -12,7 +12,7 @@ public class ConverterTests
     {
         var r = Run(Record(Session("s1")));
         Assert.True(r.IsComplete);
-        Assert.Equal(1, r.Cdrs.Count);
+        Assert.Single(r.Cdrs);
         var c = r.Cdrs[0];
         Assert.Equal("call-1", c.CallId);
         Assert.Equal("s1", c.SessionId);
@@ -51,7 +51,7 @@ public class ConverterTests
         var segs = Segment("a", "2026-01-01T10:00:00Z", "2026-01-01T10:00:40Z") + "," +
                    Segment("b", "2026-01-01T10:00:20Z", "2026-01-01T10:01:00Z");
         var r = Run(Record(Session("s1", segments: segs)));
-        Assert.Equal(1, r.Cdrs.Count);
+        Assert.Single(r.Cdrs);
         Assert.Equal(2, r.Cdrs[0].SegmentCount);
         Assert.Equal(60L, r.Cdrs[0].DurationSeconds);
         Assert.Contains("\"segments\"", r.Cdrs[0].ExtensionsJson!);
@@ -62,7 +62,7 @@ public class ConverterTests
     {
         var r = Run(Record(Session("s1", caller: "", callee: ""), type: "groupCall"));
         Assert.True(r.IsComplete);
-        Assert.Equal(1, r.Cdrs.Count);
+        Assert.Single(r.Cdrs);
         Assert.Null(r.Cdrs[0].Caller);
         Assert.Null(r.Cdrs[0].Callee);
     }
@@ -90,7 +90,7 @@ public class ConverterTests
     {
         var r = Run("""{"id":"call-1","version":2,"type":"peerToPeer"}""");
         Assert.False(r.IsComplete);
-        Assert.Equal(0, r.Cdrs.Count);
+        Assert.Empty(r.Cdrs);
         Assert.Contains("NO_SESSIONS", r.IncompleteReasons);
     }
 
@@ -99,7 +99,7 @@ public class ConverterTests
     {
         var r = Run(Record(""));
         Assert.False(r.IsComplete);
-        Assert.Equal(0, r.Cdrs.Count);
+        Assert.Empty(r.Cdrs);
     }
 
     [Fact]
@@ -107,8 +107,8 @@ public class ConverterTests
     {
         var r = Run(Record(Session("s1", end: null!)));
         Assert.False(r.IsComplete);
-        Assert.Equal(0, r.Cdrs.Count);
-        Assert.Equal(0, r.Rejections.Count);
+        Assert.Empty(r.Cdrs);
+        Assert.Empty(r.Rejections);
         Assert.Contains("SESSION_DATES_MISSING", r.IncompleteReasons);
     }
 
@@ -117,7 +117,7 @@ public class ConverterTests
     {
         var r = Run(Record(Session("s1") + "," + Session("s2", end: null!)));
         Assert.False(r.IsComplete);
-        Assert.Equal(1, r.Cdrs.Count);
+        Assert.Single(r.Cdrs);
         Assert.Equal(AggregationStatus.Incomplete, r.Cdrs[0].AggregationStatus);
     }
 
@@ -126,7 +126,7 @@ public class ConverterTests
     public void EndBeforeStart_IsRejected()
     {
         var r = Run(Record(Session("s1", start: "2026-01-01T10:01:00Z", end: "2026-01-01T10:00:00Z")));
-        Assert.Equal(1, r.Rejections.Count);
+        Assert.Single(r.Rejections);
         Assert.Equal(RejectionCodes.SessionEndBeforeStart, r.Rejections[0].Code);
         Assert.False(r.IsComplete);
     }
@@ -150,7 +150,7 @@ public class ConverterTests
     {
         var r = Run("{ this is not json");
         Assert.Equal(RejectionCodes.BadJson, r.Rejections[0].Code);
-        Assert.Equal(0, r.Cdrs.Count);
+        Assert.Empty(r.Cdrs);
     }
 
     [Fact]
@@ -164,8 +164,8 @@ public class ConverterTests
     public void ValidSessionSurvives_WhenAnotherIsInvalid()
     {
         var r = Run(Record(Session("s1") + "," + Session("s2", start: "bad")));
-        Assert.Equal(1, r.Cdrs.Count);
-        Assert.Equal(1, r.Rejections.Count);
+        Assert.Single(r.Cdrs);
+        Assert.Single(r.Rejections);
         Assert.False(r.IsComplete);
     }
 
