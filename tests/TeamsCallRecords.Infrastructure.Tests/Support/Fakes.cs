@@ -28,7 +28,14 @@ public sealed class FakeGraphClient : IGraphClient
     public Task<GraphSubscription> CreateSubscriptionAsync(GraphSubscriptionRequest request, CancellationToken ct) => throw new NotSupportedException();
     public Task<GraphSubscription> RenewSubscriptionAsync(string subscriptionId, DateTimeOffset newExpiresUtc, CancellationToken ct) => throw new NotSupportedException();
     public Task DeleteSubscriptionAsync(string subscriptionId, CancellationToken ct) => throw new NotSupportedException();
-    public Task SendActivityNotificationAsync(ActivityNotification notification, CancellationToken ct) => throw new NotSupportedException();
+    public List<ActivityNotification> Sent { get; } = new();
+    public Func<ActivityNotification, CancellationToken, Task> OnSend { get; set; } = (_, _) => Task.CompletedTask;
+
+    public async Task SendActivityNotificationAsync(ActivityNotification notification, CancellationToken ct)
+    {
+        Sent.Add(notification);
+        await OnSend(notification, ct);
+    }
 }
 
 public sealed class FakeReconciler : IReconciler

@@ -5,6 +5,7 @@ using TeamsCallRecords.Infrastructure.Config;
 using TeamsCallRecords.Infrastructure.Data;
 using TeamsCallRecords.Infrastructure.Data.Entities;
 using TeamsCallRecords.Infrastructure.Diagnostics;
+using TeamsCallRecords.Infrastructure.Outbox;
 using TeamsCallRecords.Infrastructure.Processing;
 using TeamsCallRecords.Infrastructure.Queue;
 
@@ -23,6 +24,8 @@ public sealed class Env : IDisposable
     public SourceStateStore States { get; }
     public CdrApplier Applier { get; }
     public ErrorLog Errors { get; }
+    public OutboxStore OutboxQ { get; }
+    public OutboxSender Sender { get; }
     public FakeGraphClient FakeGraph { get; } = new();
     public FakeReconciler FakeReconciler { get; } = new();
 
@@ -33,6 +36,8 @@ public sealed class Env : IDisposable
         States = new SourceStateStore(Db.Gate, Db.Factory, Options.Create(Processing), Options.Create(Graph), Db.Clock);
         Applier = new CdrApplier(Db.Gate, Options.Create(Outbox), Db.Clock);
         Errors = new ErrorLog(Db.Gate, Db.Clock, NullLogger<ErrorLog>.Instance);
+        OutboxQ = new OutboxStore(Db.Gate, Db.Factory, Options.Create(Outbox), Db.Clock, NullLogger<OutboxStore>.Instance);
+        Sender = new OutboxSender(OutboxQ, FakeGraph, Errors, Db.Clock, NullLogger<OutboxSender>.Instance);
     }
 
     public CallProcessor Processor(ICdrApplier? applier = null) =>
@@ -71,6 +76,30 @@ public sealed class Env : IDisposable
             });
             await ctx.SaveChangesAsync(ct);
         }, default);
+    }
+
+    public const string DefaultPayload =
+        "{\"activity_type\":\"callCompleted\",\"call_type\":\"oneToOne\",\"status\":\"completed\",\"duration_s\":61,\"start_utc\":\"2026-10-20T09:00:00.0000000Z\"}";
+
+    public async Task<long> SeedOutbox(string state = "new", DateTimeOffset? next = null, int attempts = 0, DateTimeOffset? locked = null,
+        string? payload = null, string recipient = "user-a", string session = "s1")
+    {
+        var row = new OutboxRow
+        {
+            Kind = OutboxKinds.Activity,
+            TenantId = TestDb.Tenant,
+            CallId = "call-1",
+            SessionId = session,
+            Recipient = recipient,
+            Payload = payload ?? DefaultPayload,
+            State = state,
+            Attempts = attempts,
+            NextAttemptUtc = UtcText.Format(next ?? Now),
+            LockedUntilUtc = locked == null ? null : UtcText.Format(locked.Value),
+            CreatedUtc = UtcText.Format(Now),
+        };
+        await Db.Gate.RunAsync(async (ctx, ct) => { ctx.OutboxItems.Add(row); await ctx.SaveChangesAsync(ct); }, default);
+        return row.Id;
     }
 
     public Task<List<SourceStateRow>> StateRows() => Db.ReadAsync(c => c.SourceStates.AsNoTracking().OrderBy(r => r.CallId).ToListAsync());
