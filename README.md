@@ -11,7 +11,8 @@ Open-source integration that reads Microsoft Teams call records through Microsof
 | --- | --- |
 | **F6 core** (`src/TeamsCallRecords.Core`): call record → CDR conversion, canonical JSON and SHA-256 hashes, version rules | Implemented. Pure functions, no network, no database |
 | Unit tests for the core (`tests/TeamsCallRecords.Core.Tests`) | Written. The first run on the real xunit runner is the GitHub Actions job of this repository: see the **Actions** tab. Until it is green, no test result is claimed |
-| Infrastructure (EF Core + SQLite, inbox/outbox, reconciliation, Graph client) | Designed, not implemented yet |
+| **SQLite data layer** (`src/TeamsCallRecords.Infrastructure`): schema migration, DbContext, write gate, PRAGMA settings, CDR mapping | Written, together with 26 tests (`tests/TeamsCallRecords.Infrastructure.Tests`). Not run yet: the first run is the GitHub Actions job, see the **Actions** tab. Until it is green, no test result is claimed |
+| Infrastructure queues (inbox/outbox), reconciliation, Graph client | Designed, not implemented yet |
 | Host (webhook, REST API, health) | Designed, not implemented yet |
 | Teams bot, activity feed notifications | Designed, require a live Microsoft 365 tenant |
 | Live Graph / Teams verification | Not done |
