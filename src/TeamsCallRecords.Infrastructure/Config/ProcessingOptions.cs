@@ -38,8 +38,8 @@ public sealed class ProcessingOptions
     {
         if (Workers < 1 || Workers > 16) yield return "Processing:Workers must be 1..16";
         if (LeaseSeconds < 10 || LeaseSeconds > 3600) yield return "Processing:LeaseSeconds must be 10..3600";
-        if (PendingLimitHours < 1) yield return "Processing:PendingLimitHours must be >= 1";
-        if (SuspendedRecheckHours < 1) yield return "Processing:SuspendedRecheckHours must be >= 1";
+        if (PendingLimitHours < 1 || PendingLimitHours > 72) yield return "Processing:PendingLimitHours must be 1..72";
+        if (SuspendedRecheckHours < 1 || SuspendedRecheckHours > 168) yield return "Processing:SuspendedRecheckHours must be 1..168";
         if (MaxAttempts < 1 || MaxAttempts > 100) yield return "Processing:MaxAttempts must be 1..100";
         string? scheduleError = null;
         try { RetryScheduleMinutes(); } catch (FormatException e) { scheduleError = e.Message; }

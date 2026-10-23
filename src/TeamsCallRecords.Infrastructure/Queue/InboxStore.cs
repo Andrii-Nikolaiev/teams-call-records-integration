@@ -98,7 +98,7 @@ WHERE next_attempt_utc <= {now}
             row.Attempts += 1;
             await db.SaveChangesAsync(token);
             return new InboxItem(row.Id, row.Kind, row.TenantId, row.CallId, row.Raw, row.Attempts,
-                UtcText.Parse(row.ReceivedUtc));
+                UtcText.Parse(row.ReceivedUtc), UtcText.Parse(row.LockedUntilUtc!));
         }, ct);
 
     public Task<DateTimeOffset?> RenewLeaseAsync(long id, DateTimeOffset expectedLockedUntilUtc, CancellationToken ct) =>
