@@ -48,4 +48,4 @@ No secrets, tokens, real identifiers or real call data in this repository. Test 
 
 ## License
 
-To be decided by the author before the first release.
+This project is licensed under the MIT License. See [LICENSE.txt](LICENSE.txt).
