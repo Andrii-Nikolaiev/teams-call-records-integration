@@ -10,8 +10,8 @@ Open-source integration that reads Microsoft Teams call records through Microsof
 | Part | State |
 | --- | --- |
 | **F6 core** (`src/TeamsCallRecords.Core`): call record → CDR conversion, canonical JSON and SHA-256 hashes, version rules | Implemented. Pure functions, no network, no database |
-| Unit tests for the core (`tests/TeamsCallRecords.Core.Tests`) | Written. The first run on the real xunit runner is the GitHub Actions job of this repository: see the **Actions** tab. Until it is green, no test result is claimed |
-| **SQLite data layer** (`src/TeamsCallRecords.Infrastructure`): schema migration, DbContext, write gate, PRAGMA settings, CDR mapping | Written, together with 26 tests (`tests/TeamsCallRecords.Infrastructure.Tests`). Not run yet: the first run is the GitHub Actions job, see the **Actions** tab. Until it is green, no test result is claimed |
+| Unit tests for the core (`tests/TeamsCallRecords.Core.Tests`) | Passing: the GitHub Actions job `ci` is green (run #12, commit 6f3cfb3, 73 tests in total for Core and Infrastructure) |
+| **SQLite data layer** (`src/TeamsCallRecords.Infrastructure`): schema migration, DbContext, write gate, PRAGMA settings, CDR mapping | Implemented, with 26 tests (`tests/TeamsCallRecords.Infrastructure.Tests`). Passing in the GitHub Actions job `ci` (run #12, commit 6f3cfb3). Live Microsoft 365 verification is not done |
 | Infrastructure queues (inbox/outbox), reconciliation, Graph client | Designed, not implemented yet |
 | Host (webhook, REST API, health) | Designed, not implemented yet |
 | Teams bot, activity feed notifications | Designed, require a live Microsoft 365 tenant |
