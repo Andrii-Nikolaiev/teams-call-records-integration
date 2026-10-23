@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3000" height="2320" viewBox="0 0 3000 2320" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif">
+<title>Figure 3. Core F6: Converting a Record into CDRs</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="26" markerHeight="26" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1F4E79"/></marker></defs>
+<rect width="3000" height="2320" fill="#fff"/>
+<line x1="1449.0" y1="721.5" x2="1449.0" y2="847.5" stroke="#1F4E79" stroke-width="3" marker-end="url(#a)"/>
+<line x1="1449.0" y1="958.5" x2="1449.0" y2="1084.5" stroke="#1F4E79" stroke-width="3" marker-end="url(#a)"/>
+<line x1="1263.0" y1="1195.5" x2="690.0" y2="1360.5" stroke="#1F4E79" stroke-width="3" marker-end="url(#a)"/>
+<line x1="1449.0" y1="1195.5" x2="1449.0" y2="1360.5" stroke="#1F4E79" stroke-width="3" marker-end="url(#a)"/>
+<line x1="1645.5" y1="1195.5" x2="2260.5" y2="1360.5" stroke="#1F4E79" stroke-width="3" marker-end="url(#a)"/>
+<line x1="603.0" y1="1471.5" x2="859.5" y2="1597.5" stroke="#1F4E79" stroke-width="3" marker-end="url(#a)"/>
+<line x1="1339.5" y1="1471.5" x2="1083.0" y2="1597.5" stroke="#1F4E79" stroke-width="3" marker-end="url(#a)"/>
+<rect x="1216.5" y="610.5" width="465.0" height="111.0" rx="36" fill="#E8F3FC" stroke="#1F4E79" stroke-width="3.5"/>
+<text x="1449.0" y="678.0" font-size="52" fill="#1B365D" text-anchor="middle">callRecord JSON</text>
+<rect x="1048.5" y="847.5" width="802.5" height="111.0" rx="36" fill="#E8F3FC" stroke="#1F4E79" stroke-width="3.5"/>
+<text x="1449.8" y="915.0" font-size="52" fill="#1B365D" text-anchor="middle">CallRecordConverter.Convert</text>
+<rect x="1189.5" y="1084.5" width="520.5" height="111.0" rx="36" fill="#E8F3FC" stroke="#1F4E79" stroke-width="3.5"/>
+<text x="1449.8" y="1152.0" font-size="52" fill="#1B365D" text-anchor="middle">Session validation</text>
+<rect x="132.0" y="1360.5" width="723.0" height="111.0" rx="36" fill="#E8F3FC" stroke="#1F4E79" stroke-width="3.5"/>
+<text x="493.5" y="1428.0" font-size="52" fill="#1B365D" text-anchor="middle">Canonical.HashOf session</text>
+<rect x="948.0" y="1360.5" width="1003.5" height="111.0" rx="36" fill="#E8F3FC" stroke="#1F4E79" stroke-width="3.5"/>
+<text x="1449.8" y="1428.0" font-size="52" fill="#1B365D" text-anchor="middle">VersionRules.RoundDurationSeconds</text>
+<rect x="2043.0" y="1360.5" width="825.0" height="111.0" rx="36" fill="#E8F3FC" stroke="#1F4E79" stroke-width="3.5"/>
+<text x="2455.5" y="1428.0" font-size="52" fill="#1B365D" text-anchor="middle">Rejection / incomplete reason</text>
+<rect x="468.0" y="1597.5" width="1003.5" height="111.0" rx="36" fill="#E8F3FC" stroke="#1F4E79" stroke-width="3.5"/>
+<text x="969.8" y="1665.0" font-size="52" fill="#1B365D" text-anchor="middle">ConversionResult + CDR per session</text>
+<text x="2230.5" y="1287.0" font-size="41" fill="#4B5B73" text-anchor="middle">Invalid or incomplete</text>
+</svg>
