@@ -21,11 +21,15 @@ public sealed class WebhookOptions
     public int MaxBatchItems { get; set; } = 100;
     /// <summary>Showcase simplification: one fixed clientState instead of per-subscription values (there is no subscription store yet).</summary>
     public string ClientState { get; set; } = "";
+    /// <summary>How long a just-created subscription may be unknown to the database before notifications for it are rejected (TRP 3.23.3).</summary>
+    public int SubscriptionCreationGraceSeconds { get; set; } = 120;
 
     public IEnumerable<string> Validate()
     {
         if (MaxBodyBytes < 1024 || MaxBodyBytes > 10_485_760) yield return "Webhook:MaxBodyBytes must be 1024..10485760";
         if (MaxBatchItems < 1 || MaxBatchItems > 1000) yield return "Webhook:MaxBatchItems must be 1..1000";
+        if (SubscriptionCreationGraceSeconds < 1 || SubscriptionCreationGraceSeconds > 300)
+            yield return "Webhook:SubscriptionCreationGraceSeconds must be 1..300";
         if (string.IsNullOrWhiteSpace(ClientState) || ClientState.Length < 8 || ClientState.Length > 128)
             yield return "Webhook:ClientState must be 8..128 characters";
     }
