@@ -143,25 +143,45 @@ function New-RandomHex { $b = New-Object byte[] 24; [Security.Cryptography.Rando
 
 Graph must reach the Host from the internet over HTTPS, so a public address that forwards to the local Host is needed.
 
-- **What was tested:** ngrok (free plan, version 3.35) forwarding to the Host over HTTPS: `ngrok http https://localhost:44396 --host-header="localhost:44396"`. In that run the Host listened on `https://localhost:44396` (started with `dotnet run --project src/TeamsCallRecords.Host --no-launch-profile --urls https://localhost:44396`, with the development certificate trusted). The free plan gives a new random address each time ngrok starts.
-- **What was not tested:** `demo/run-live.ps1` listens on `http://localhost:60049`, so `ngrok http 60049` should be the equivalent; this combination was not run. Microsoft Dev Tunnels (named in ADR-0001 D1) was also not run.
+- **Tested (variant A in section 13):** ngrok (free plan, version 3.35) forwarding to the Host over HTTPS: `ngrok http https://localhost:44396 --host-header="localhost:44396"`, with the Host listening on `https://localhost:44396` and the .NET development certificate trusted. The free plan gives a new random address each time ngrok starts.
+- **Not tested (variant B in section 13):** `demo/run-live.ps1` listens on `http://localhost:60049`, so `ngrok http 60049` should be the equivalent; this combination was not run. Microsoft Dev Tunnels (named in ADR-0001 D1) was not run either.
 - **Start the tunnel first** and copy its address `https://<host>`: the Host needs it in `Graph__NotificationUrl` before it starts. The tunnel answers 502 until the Host is running; that is expected.
 - **The tunnel exposes the whole Host port**, not only `/graph/*`. `/api/*` is protected only by `X-TCRI-Key`. Use a fresh random key, run the test for as short a time as possible and close the tunnel afterwards. Treat the tunnel address as semi-public.
 
 ## 13. Start the Host
 
-In PowerShell, from the repository root, in the same session where the script will run:
+Run everything below in one PowerShell session, from the repository root, after the tunnel is up. The API key is copied to the clipboard instead of being printed; paste it where the requests need it and do not leave it in a screenshot or a chat.
+
+**Variant A: the tested configuration** (tunnel to `https://localhost:44396`). The test used a private start script outside the repository with the same variables and the same `dotnet run` line; the block below is that setup assembled from it and from `run-live.ps1`, and was not run as one block:
 
 ```
 $env:Storage__DataDirectory = 'D:\tcri-live-push-data'
 $env:Api__Key = New-RandomHex
 $env:Graph__ClientState = New-RandomHex
 $env:Graph__NotificationUrl = 'https://YOUR_TUNNEL_HOST/graph/notify'
-"Api key: $($env:Api__Key)"
-.\demo\run-live.ps1 -TenantId 'YOUR_TENANT_GUID' -ClientId 'YOUR_APPLICATION_GUID'
+$env:Graph__Mode = 'Live'
+$env:Graph__TenantId = 'YOUR_TENANT_GUID'
+$env:Graph__ClientId = 'YOUR_APPLICATION_GUID'
+$env:Demo__Enabled = 'false'
+$sec = Read-Host -Prompt 'Client secret' -AsSecureString
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+try { $env:Graph__ClientSecret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+Remove-Variable sec, bstr
+Set-Clipboard $env:Api__Key
+dotnet run --project src/TeamsCallRecords.Host --no-launch-profile --urls https://localhost:44396
 ```
 
-The script asks for the client secret and starts the Host with `Graph__Mode=Live` and `Demo__Enabled=false`; it does not clear the variables set above. Note the printed API key: it is needed for the requests below.
+**Variant B: not tested with a tunnel** (tunnel to `http://localhost:60049`, started with `ngrok http 60049`). It uses the script from the repository, which asks for the client secret, sets `Graph__Mode=Live` and `Demo__Enabled=false`, and does not clear the variables set before it:
+
+```
+$env:Storage__DataDirectory = 'D:\tcri-live-push-data'
+$env:Api__Key = New-RandomHex
+$env:Graph__ClientState = New-RandomHex
+$env:Graph__NotificationUrl = 'https://YOUR_TUNNEL_HOST/graph/notify'
+Set-Clipboard $env:Api__Key
+.\demo\run-live.ps1 -TenantId 'YOUR_TENANT_GUID' -ClientId 'YOUR_APPLICATION_GUID'
+```
 
 The Host starts listening first and only then does `SubscriptionWorker` create the subscription (ADR-0001 D5), so the validation request from Graph finds the Host ready. In the test the subscription was created within about a second of the first reconciliation. The worker repeats its check every 5 minutes; the line `Subscriptions are in order` was seen in the Host log after a successful check.
 
@@ -187,14 +207,27 @@ Expected (as observed in the test):
 
 ## 15. Check that Graph holds the subscription
 
-This asks Graph itself, not TCRI. In the second window (the token request and the list request are the ones run in the test; the secret prompt is hidden here):
+This asks Graph itself, not TCRI. In the second window. The token request and the list request are the calls that were run in the test (there the secret was typed in plain text); the hidden prompt, the function wrapper and the cleanup are new and were not run as written:
 
 ```
-$sec = Read-Host 'Client secret' -AsSecureString
-$secret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
-$r = Invoke-RestMethod -Method Post -Uri 'https://login.microsoftonline.com/YOUR_TENANT_GUID/oauth2/v2.0/token' -Body @{ client_id = 'YOUR_APPLICATION_GUID'; client_secret = $secret; scope = 'https://graph.microsoft.com/.default'; grant_type = 'client_credentials' }
-(Invoke-RestMethod -Uri 'https://graph.microsoft.com/v1.0/subscriptions' -Headers @{ Authorization = "Bearer $($r.access_token)" }).value | Select-Object id,resource,notificationUrl,expirationDateTime,changeType | Format-List
+function Get-GraphToken {
+    param([string]$TenantId, [string]$ClientId)
+    $sec = Read-Host 'Client secret' -AsSecureString
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+    try {
+        $secret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+        (Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token" -Body @{ client_id = $ClientId; client_secret = $secret; scope = 'https://graph.microsoft.com/.default'; grant_type = 'client_credentials' }).access_token
+    }
+    finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+        Remove-Variable secret, sec -ErrorAction SilentlyContinue
+    }
+}
+$token = Get-GraphToken -TenantId 'YOUR_TENANT_GUID' -ClientId 'YOUR_APPLICATION_GUID'
+(Invoke-RestMethod -Uri 'https://graph.microsoft.com/v1.0/subscriptions' -Headers @{ Authorization = "Bearer $token" }).value | Select-Object id,resource,notificationUrl,expirationDateTime,changeType | Format-List
 ```
+
+`ZeroFreeBSTR` and `Remove-Variable` release the unmanaged copy and drop the references; they do not erase the .NET string from memory, so close the window when you are done. The token is valid for a limited time (typically about an hour).
 
 Expected: one subscription with `resource` `communications/callRecords`, `changeType` `created`, your tunnel address in `notificationUrl`, and `expirationDateTime` 4230 minutes after creation (about 70.5 hours). The tunnel's request list should also show the validation request from Graph (`POST /graph/notify`, 200) a moment after the Host started.
 
@@ -220,7 +253,14 @@ In the test, the new call had one `callRecord` row received 0.09 s after the req
 ## 18. Finish safely, manage the subscription and rotate secrets
 
 1. Stop the Host (Ctrl+C), then stop the tunnel. Without a tunnel Graph cannot deliver; the subscription is left in place.
-2. **The subscription is not removed by stopping the Host.** It expires by itself at the time shown in section 15 (at most 4230 minutes after creation). To remove it earlier, send a Graph request with the token from section 15 (a standard Graph call; it was not run in the test): `Invoke-RestMethod -Method Delete -Uri 'https://graph.microsoft.com/v1.0/subscriptions/SUBSCRIPTION_ID' -Headers @{ Authorization = "Bearer $($r.access_token)" }`.
+2. **The subscription is not removed by stopping the Host.** It expires by itself at the time shown in section 15 (at most 4230 minutes after creation). To remove it earlier, get a **fresh** token with `Get-GraphToken` from section 15 (the token from the check may have expired by now; if the function is not defined in this window, define it again) and send the standard Graph call (it was not run in the test):
+
+```
+$token = Get-GraphToken -TenantId 'YOUR_TENANT_GUID' -ClientId 'YOUR_APPLICATION_GUID'
+Invoke-RestMethod -Method Delete -Uri 'https://graph.microsoft.com/v1.0/subscriptions/SUBSCRIPTION_ID' -Headers @{ Authorization = "Bearer $token" }
+```
+
+   Take `SUBSCRIPTION_ID` from the list in section 15. An empty response means success; repeat the list request to confirm the subscription is gone.
 3. **Before a new run with a different tunnel address or a new `Graph__ClientState`, delete the old subscription first (or wait until it expires) and use a new data directory.** Graph keeps the `clientState` that was set when the subscription was created, and a renewal in TCRI does not change it. A changed address with an old data directory makes the Host log `subscription notification URL mismatch` to `error_log` and do nothing (ADR-0001 DV-1). A second subscription for the same resource and change type is rejected by Graph with HTTP 409 (ADR-0001). These cases were not exercised live.
 4. **A `clientState` that appeared in a screenshot, a log, a chat or a notification body is exposed.** Do not reuse it: delete the subscription, then start with a new data directory and a new `Graph__ClientState`.
 5. Remove the secrets from the PowerShell sessions:
