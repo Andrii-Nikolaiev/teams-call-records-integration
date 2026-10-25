@@ -1,22 +1,38 @@
 # Teams Call Records Integration (TCRI)
 
-Open-source integration that reads Microsoft Teams call records through Microsoft Graph (Entra ID, app-only), converts every call session into a CDR, stores the result in SQLite and reports it through REST, a Teams bot and the activity feed. C# / .NET 8.
+Open-source integration that reads Microsoft Teams call records through Microsoft Graph (Entra ID, app-only), converts every call session into a CDR, stores the result in SQLite and exposes it through a REST API. Notifications to Teams users (activity feed, Teams bot) are part of the design; see the status below. C# / .NET 8.
 
 > **Status: engineering prototype. Not production-ready.**
-> The design is complete (requirements, engineering proposal, detailed technical design). The core, data layer, processing pipeline and HTTP interface are implemented and run in a demo mode with an in-memory Graph stand-in or against a live Microsoft 365 tenant. One real Teams call has been verified end to end, see the [live test protocol](docs/LIVE_TEST_PROTOCOL.md).
+> The system architecture and detailed technical design are documented. Implementation and live verification are progressing incrementally. The core, data layer, processing pipeline and HTTP interface are implemented. They run in demo mode with an in-memory Graph stand-in, or against a live Microsoft 365 tenant (`Graph:Mode=Live`). One real Teams call has been verified end to end, picked up by periodic reconciliation; see the [live test protocol](docs/LIVE_TEST_PROTOCOL.md). Push notifications (Graph subscriptions), activity feed delivery and the Teams bot are not verified or not implemented, see below.
 
 ## What works now
+
+### Implemented
+
+The solution passed 356 automated tests on October 25, 2026; none of them uses the network. GitHub Actions builds and tests the full solution on every push and pull request.
 
 | Part | State |
 | --- | --- |
 | **F6 core** (`src/TeamsCallRecords.Core`): call record → CDR conversion, canonical JSON and SHA-256 hashes, version rules | Implemented. Pure functions, no network, no database |
-| Unit tests for the core (`tests/TeamsCallRecords.Core.Tests`) | 42 tests, run by the GitHub Actions job `ci` on every push to `main` |
-| **SQLite data layer** (`src/TeamsCallRecords.Infrastructure`): schema migration, DbContext, write gate, PRAGMA settings, CDR mapping | Implemented, with tests in `tests/TeamsCallRecords.Infrastructure.Tests`. Verified with one real call, see the [live test protocol](docs/LIVE_TEST_PROTOCOL.md) |
-| Infrastructure queues (inbox/outbox), reconciliation, processing | Implemented, tested (230 tests for the whole Infrastructure project) |
-| Host (`src/TeamsCallRecords.Host`): Graph webhook, REST API (`/api/cdr`, `/api/reprocess`, `/api/status`), health, background workers | Implemented, tested end to end (30 tests in `tests/TeamsCallRecords.Host.Tests`). Runs against an in-memory stand-in for Microsoft Graph (default) or live Microsoft Graph (`Graph:Mode=Live`) |
-| Graph client for a live Microsoft 365 tenant (`GraphClient`) | Implemented, tested against an HTTP stub in `tests/TeamsCallRecords.Infrastructure.Tests`. Subscription management is not implemented |
-| Teams bot, activity feed notifications to real users | Designed, require a live Microsoft 365 tenant |
-| Live Graph / Teams verification | One real one-to-one call was read through Graph and returned as a CDR ([protocol](docs/LIVE_TEST_PROTOCOL.md)). Push notifications (subscriptions), bot and activity feed are not verified |
+| **SQLite data layer** (`src/TeamsCallRecords.Infrastructure`): schema migration, DbContext, write gate, PRAGMA settings, CDR mapping | Implemented |
+| Infrastructure queues (inbox/outbox), reconciliation, processing, activity notification sender | Implemented |
+| Host (`src/TeamsCallRecords.Host`): Graph webhook endpoint, REST API (`/api/cdr`, `/api/reprocess`, `/api/status`), health, background workers | Implemented. Runs against an in-memory stand-in for Microsoft Graph (default) or live Microsoft Graph (`Graph:Mode=Live`) |
+| Graph client for a live Microsoft 365 tenant (`GraphClient`) | Implemented: token, call record list and get with paging, subscription calls, activity notification call. Tested against an HTTP stub. The service that creates and renews subscriptions is not implemented |
+
+### Verified on a real tenant
+
+One test on 2026-10-25, see the [live test protocol](docs/LIVE_TEST_PROTOCOL.md) for evidence and limits:
+
+- App-only authentication with the `CallRecords.Read.All` application permission.
+- Call record list with a `startDateTime` filter: accepted by Graph (HTTP 200).
+- One real one-to-one Teams call between two users of the tenant was read through Graph by the periodic reconciliation, converted into one CDR, stored in SQLite and returned by `GET /api/cdr`.
+
+### Not verified or not implemented
+
+- Graph subscriptions and push delivery to `/graph/notify`: the subscription service is not implemented, and the live test used no subscription and no public HTTPS address.
+- Activity feed delivery: the sender is implemented, but in the live test both notifications failed with HTTP 403; the cause was not investigated.
+- Teams bot: designed, not implemented.
+- Group calls, video or screen sharing, PSTN, failed or missed calls; load and reliability; paging through `@odata.nextLink` with real data.
 
 ## F6 core
 
@@ -52,6 +68,12 @@ What the demo is not:
 - No Teams bot. Activity feed notifications go to an in-memory list, not to real users.
 - No Graph subscription management (create/renew); a single fixed `clientState` is used.
 - The API key and `clientState` in `appsettings.json` are demo values. Replace them before any real use.
+
+## Live mode
+
+`Graph:Mode=Live` runs the Host against a real Microsoft 365 tenant: it requires `Demo:Enabled=false` and the client secret in the `Graph__ClientSecret` environment variable. `demo/run-live.ps1` starts it and asks for the secret; the setup is described in section 7 of the [live test protocol](docs/LIVE_TEST_PROTOCOL.md).
+
+Demo and live runs use the same SQLite file unless `Storage:DataDirectory` is changed, so synthetic and real records can end up in one database. Use a separate data directory for a live run.
 
 ## Build and test
 
