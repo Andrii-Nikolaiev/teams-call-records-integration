@@ -131,14 +131,14 @@ public static class ApiEndpoints
 
     // GET /api/status
     private static async Task<IResult> GetStatusAsync(IInboxStore inbox, ISourceStateStore states, IOutboxStore outbox,
-        IReconciler reconciler, ReadinessState readiness, TimeProvider clock, CancellationToken ct)
+        IReconciler reconciler, ReadinessState readiness, HostMode mode, TimeProvider clock, CancellationToken ct)
     {
         var i = await inbox.GetStatsAsync(ct);
         var s = await states.GetCountsAsync(ct);
         var o = await outbox.GetStatsAsync(ct);
         return Results.Json(new
         {
-            Mode = "demo",
+            Mode = mode.Name,
             Ready = readiness.IsReady,
             ServerTimeUtc = UtcText.Format(clock.GetUtcNow()),
             Inbox = new { i.Pending, i.OldestPendingAgeSeconds, i.Failed },

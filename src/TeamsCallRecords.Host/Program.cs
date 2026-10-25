@@ -30,11 +30,13 @@ if (graphMode.Equals("Live", StringComparison.OrdinalIgnoreCase))
 {
     if (builder.Configuration.GetValue<bool>("Demo:Enabled"))
         throw new InvalidOperationException("Graph:Mode=Live requires Demo:Enabled=false (set Demo__Enabled=false)");
+    builder.Services.AddSingleton(new HostMode(HostMode.Live));
     builder.Services.AddTcriGraphClient();
     builder.Services.AddHostedService<SubscriptionWorker>();   // does nothing unless Graph:NotificationUrl is set (ADR-0001 D4)
 }
 else if (graphMode.Equals("Demo", StringComparison.OrdinalIgnoreCase))
 {
+    builder.Services.AddSingleton(new HostMode(HostMode.Demo));
     builder.Services.AddSingleton<InMemoryGraphClient>();
     builder.Services.AddSingleton<IGraphClient>(sp => sp.GetRequiredService<InMemoryGraphClient>());
 }
