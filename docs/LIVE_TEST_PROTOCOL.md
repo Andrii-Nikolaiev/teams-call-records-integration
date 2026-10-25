@@ -195,7 +195,7 @@ Graph `GET /subscriptions` returned one subscription with the tunnel notificatio
 
 - Subscription renewal, `reauthorizationRequired`, `subscriptionRemoved` and `missed` lifecycle notifications were not observed live; they are covered by automated tests with a fake Graph client only.
 - `/graph/lifecycle` and the health routes were not probed from outside.
-- `/api/status` reports `"mode":"demo"` in live mode (a known hard-coded value).
+- `/api/status` reported `"mode":"demo"` in live mode during this test (a hard-coded value, fixed in commit `fd57178`; the corrected value has not been observed in a live run yet).
 - One call on one tenant, through a temporary tunnel: a functional check, not a reliability test.
 
 ### 8.7 Reproducing
