@@ -7,6 +7,7 @@ using TeamsCallRecords.Infrastructure.Graph;
 using TeamsCallRecords.Infrastructure.Outbox;
 using TeamsCallRecords.Infrastructure.Processing;
 using TeamsCallRecords.Infrastructure.Queue;
+using TeamsCallRecords.Infrastructure.Subscriptions;
 using TeamsCallRecords.Infrastructure.Tests.Support;
 
 namespace TeamsCallRecords.Infrastructure.Tests;
@@ -44,6 +45,7 @@ public class RegistrationTests : IDisposable
         Assert.NotNull(sp.GetRequiredService<ICallProcessor>());
         Assert.NotNull(sp.GetRequiredService<IReconciler>());
         Assert.NotNull(sp.GetRequiredService<IOutboxSender>());
+        Assert.NotNull(sp.GetRequiredService<ISubscriptionStore>());
     }
 
     [Fact]

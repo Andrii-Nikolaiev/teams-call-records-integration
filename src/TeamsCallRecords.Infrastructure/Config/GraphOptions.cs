@@ -35,8 +35,9 @@ public sealed class GraphOptions
     }
 
     /// <summary>
-    /// Extra rules for the real Graph client (Graph:Mode=Live). NotificationUrl and ClientState are not
-    /// checked here: they are used by subscription management, which is not implemented yet.
+    /// Extra rules for the real Graph client (Graph:Mode=Live). Subscription management is on only when NotificationUrl is set
+    /// (ADR-0001 D4): then it must be an absolute HTTPS address of /graph/notify and ClientState (the one secret of all
+    /// subscriptions, at most 128 characters in Graph) must be set. Without NotificationUrl the service only polls.
     /// </summary>
     public IEnumerable<string> ValidateLive()
     {
@@ -44,6 +45,16 @@ public sealed class GraphOptions
         if (string.IsNullOrWhiteSpace(ClientSecret)) yield return "Graph:ClientSecret must not be empty (set the environment variable Graph__ClientSecret)";
         if (!Guid.TryParse(TenantId, out _)) yield return "Graph:TenantId must be a GUID";
         if (!Guid.TryParse(ClientId, out _)) yield return "Graph:ClientId must be a GUID";
+
+        if (!string.IsNullOrWhiteSpace(NotificationUrl))
+        {
+            if (!IsHttpsUrl(NotificationUrl))
+                yield return "Graph:NotificationUrl must be an absolute HTTPS address";
+            else if (!new Uri(NotificationUrl).AbsolutePath.TrimEnd('/').EndsWith("/graph/notify", StringComparison.OrdinalIgnoreCase))
+                yield return "Graph:NotificationUrl must end with /graph/notify";
+            if (string.IsNullOrWhiteSpace(ClientState) || ClientState.Length < 8 || ClientState.Length > 128)
+                yield return "Graph:ClientState must be 8..128 characters when Graph:NotificationUrl is set (set the environment variable Graph__ClientState)";
+        }
     }
 
     private static bool IsHttpsUrl(string value) =>

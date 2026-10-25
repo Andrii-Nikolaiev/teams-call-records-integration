@@ -8,13 +8,14 @@ namespace TeamsCallRecords.Host.Web;
 /// <summary>An in-flight subscription: created in Graph, not yet saved in the database. Contains no secrets, only the clientState hash.</summary>
 public sealed record PendingSubscription(string SubscriptionId, string TenantId, string Resource, string ClientStateHash, DateTimeOffset ExpiresUtc)
 {
-    /// <summary>True when tenant and resource are equal (case-insensitive, leading and trailing '/' ignored) and the clientState hash matches in constant time.</summary>
+    /// <summary>
+    /// True when the tenant is equal, the notification resource is the subscribed resource or lies under it (see <see cref="ResourceMatch"/>)
+    /// and the clientState hash matches in constant time.
+    /// </summary>
     public bool Matches(string tenantId, string resource, string clientState) =>
         string.Equals(TenantId, tenantId, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(Normalize(Resource), Normalize(resource), StringComparison.OrdinalIgnoreCase)
+        && ResourceMatch.Covers(Resource, resource)
         && SubscriptionStore.Matches(ClientStateHash, clientState);
-
-    private static string Normalize(string resource) => resource.Trim().Trim('/');
 }
 
 /// <summary>

@@ -152,6 +152,30 @@ public class PendingSubscriptionRegistryTests
     }
 
     [Fact]
+    public void Matches_NotificationResourceUnderTheSubscribedOne_True()
+    {
+        var (registry, _) = Create();
+        registry.Mark("sub-1", Tenant, Resource, Hash("state-1"));
+        registry.TryGet("sub-1", out var marker);
+
+        Assert.True(marker!.Matches(Tenant, "communications/callRecords/call-42", "state-1"));
+        Assert.False(marker.Matches(Tenant, "communications/callRecordsOther/call-42", "state-1"));
+    }
+
+    [Theory]
+    [InlineData("communications/callRecords", "communications/callRecords", true)]
+    [InlineData("communications/callRecords", "/Communications/CallRecords/", true)]
+    [InlineData("communications/callRecords", "communications/callRecords/abc", true)]
+    [InlineData("communications/callRecords", "communications/callRecordsX", false)]
+    [InlineData("communications/callRecords", "communications", false)]
+    [InlineData("communications/callRecords", "", false)]
+    [InlineData("", "communications/callRecords", false)]
+    public void ResourceMatch_Covers(string subscribed, string notified, bool expected)
+    {
+        Assert.Equal(expected, ResourceMatch.Covers(subscribed, notified));
+    }
+
+    [Fact]
     public void Registry_IsUsableAsMarkerInterface()
     {
         var (registry, _) = Create();

@@ -13,6 +13,7 @@ using TeamsCallRecords.Infrastructure.Graph;
 using TeamsCallRecords.Infrastructure.Outbox;
 using TeamsCallRecords.Infrastructure.Processing;
 using TeamsCallRecords.Infrastructure.Queue;
+using TeamsCallRecords.Infrastructure.Subscriptions;
 
 namespace TeamsCallRecords.Infrastructure;
 
@@ -33,6 +34,7 @@ public static class InfrastructureRegistration
         AddSection<ReconcileOptions>(services, configuration, "Reconcile", o => o.Validate());
         AddSection<OutboxOptions>(services, configuration, "Outbox", o => o.Validate());
         AddSection<GraphOptions>(services, configuration, "Graph", o => o.Validate());
+        AddSection<SubscriptionOptions>(services, configuration, "Subscriptions", o => o.Validate());
 
         services.AddSingleton<SqlitePragmaInterceptor>();
         services.AddDbContextFactory<TcriDbContext>((sp, options) =>
@@ -47,6 +49,7 @@ public static class InfrastructureRegistration
         services.AddSingleton<IInboxStore, InboxStore>();
         services.AddSingleton<IOutboxStore, OutboxStore>();
         services.AddSingleton<ISourceStateStore, SourceStateStore>();
+        services.AddSingleton<ISubscriptionStore, SubscriptionStore>();
         services.AddSingleton<IErrorLog, ErrorLog>();
         services.AddSingleton<ICdrReader, CdrReader>();
 

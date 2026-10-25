@@ -6,6 +6,7 @@ using TeamsCallRecords.Host.Web;
 using TeamsCallRecords.Host.Workers;
 using TeamsCallRecords.Infrastructure;
 using TeamsCallRecords.Infrastructure.Graph;
+using TeamsCallRecords.Infrastructure.Subscriptions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +17,12 @@ AddValidated<WebhookOptions>(builder, "Webhook", o => o.Validate());
 builder.Services.AddOptions<DemoOptions>().Bind(builder.Configuration.GetSection("Demo"));
 builder.Services.AddSingleton<ReadinessState>();
 
+// Subscriptions (ADR-0001): the marker and the validator live in the Host, the service and the store in Infrastructure.
+builder.Services.AddSingleton<PendingSubscriptionRegistry>();
+builder.Services.AddSingleton<IPendingSubscriptionMarker>(sp => sp.GetRequiredService<PendingSubscriptionRegistry>());
+builder.Services.AddSingleton<IGraphNotificationValidator, GraphNotificationValidator>();
+builder.Services.AddSingleton<ISubscriptionService, SubscriptionService>();
+
 // Graph:Mode selects the IGraphClient. Demo (default): an in-memory stand-in, no Microsoft 365 tenant needed.
 // Live: the real Microsoft Graph client; the demo endpoints (which need the in-memory client) must be off.
 var graphMode = builder.Configuration["Graph:Mode"] ?? "Demo";
@@ -24,6 +31,7 @@ if (graphMode.Equals("Live", StringComparison.OrdinalIgnoreCase))
     if (builder.Configuration.GetValue<bool>("Demo:Enabled"))
         throw new InvalidOperationException("Graph:Mode=Live requires Demo:Enabled=false (set Demo__Enabled=false)");
     builder.Services.AddTcriGraphClient();
+    builder.Services.AddHostedService<SubscriptionWorker>();   // does nothing unless Graph:NotificationUrl is set (ADR-0001 D4)
 }
 else if (graphMode.Equals("Demo", StringComparison.OrdinalIgnoreCase))
 {
