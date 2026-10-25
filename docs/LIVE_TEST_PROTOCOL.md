@@ -83,16 +83,16 @@ Shown:
 - A real call is converted into a CDR by the existing pipeline without changes to the Core.
 - The `$filter` on `startDateTime` for the call record list, which the design marked as unverified (`[P-proposed]`), is accepted by Graph (HTTP 200).
 
-Inference, not directly observed:
-- Because no subscription existed, the record must have reached TCRI through the periodic reconciliation, not through a notification. The log line of that reconciliation run was not captured.
+Observed in the database after the test (SQLite file read in read-only mode):
+- The record reached TCRI through the periodic reconciliation, not through a notification: the `inbox` row of the call has `kind=reconcile` (received 10:29:21Z, CDR created 10:29:22Z), and the `subscription` table is empty.
+- `cdr_seq` is 2 because the database file was shared with earlier demo runs: `cdr_seq=1` is a synthetic demo CDR (tenant `11111111…`, created 2026-10-23). The API filters by tenant and does not return it. `sqlite_sequence` for `cdr` is 2 with two rows, so there are no gaps.
 
 Not measured or not tested:
-- **Delay between the end of a call and its availability in Graph.** The CDR was seen at about 10:55Z, roughly 37 minutes after the call ended; the actual delay is not known.
+- **Delay between the end of a call and its availability in Graph.** The call ended at 10:17:47Z and the record was fetched by the reconciliation run at 10:29:21Z, so it was available less than 12 minutes after the end of the call. This is an upper bound; the lower bound is not known. The tester first queried the API at about 10:55Z.
 - **Push notifications:** no Graph subscription was created, no public HTTPS endpoint was used, `/graph/notify` was not exercised by Microsoft.
-- Teams bot and activity feed notifications to users.
+- Teams bot and activity feed notifications to users. Two activity notifications (one per user) were attempted at 10:29Z: `POST /v1.0/users/{id}/teamwork/sendActivityNotification` returned HTTP 403 for both, and both outbox items ended in state `failed` after one attempt. The cause was not investigated; the test setup had no permission or Teams app configured for activity notifications.
 - Group calls, calls with video or screen sharing, PSTN calls, failed or missed calls.
 - The callee identifier was not cross-checked against Entra.
-- `cdr_seq` is 2 for the first and only CDR; the reason was not investigated.
 - A single call on a single tenant: this is a functional check, not a load or reliability test.
 
 ## 7. Reproducing
