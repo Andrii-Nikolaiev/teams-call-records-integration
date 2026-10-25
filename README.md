@@ -3,7 +3,7 @@
 Open-source integration that reads Microsoft Teams call records through Microsoft Graph (Entra ID, app-only), converts every call session into a CDR, stores the result in SQLite and reports it through REST, a Teams bot and the activity feed. C# / .NET 8.
 
 > **Status: engineering prototype. Not production-ready.**
-> The design is complete (requirements, engineering proposal, detailed technical design). The core, data layer, processing pipeline and HTTP interface are implemented and run in a demo mode with an in-memory Graph stand-in; a live Microsoft 365 tenant is not used yet.
+> The design is complete (requirements, engineering proposal, detailed technical design). The core, data layer, processing pipeline and HTTP interface are implemented and run in a demo mode with an in-memory Graph stand-in or against a live Microsoft 365 tenant. One real Teams call has been verified end to end, see the [live test protocol](docs/LIVE_TEST_PROTOCOL.md).
 
 ## What works now
 
@@ -11,12 +11,12 @@ Open-source integration that reads Microsoft Teams call records through Microsof
 | --- | --- |
 | **F6 core** (`src/TeamsCallRecords.Core`): call record → CDR conversion, canonical JSON and SHA-256 hashes, version rules | Implemented. Pure functions, no network, no database |
 | Unit tests for the core (`tests/TeamsCallRecords.Core.Tests`) | 42 tests, run by the GitHub Actions job `ci` on every push to `main` |
-| **SQLite data layer** (`src/TeamsCallRecords.Infrastructure`): schema migration, DbContext, write gate, PRAGMA settings, CDR mapping | Implemented, with tests in `tests/TeamsCallRecords.Infrastructure.Tests`. Live Microsoft 365 verification is not done |
+| **SQLite data layer** (`src/TeamsCallRecords.Infrastructure`): schema migration, DbContext, write gate, PRAGMA settings, CDR mapping | Implemented, with tests in `tests/TeamsCallRecords.Infrastructure.Tests`. Verified with one real call, see the [live test protocol](docs/LIVE_TEST_PROTOCOL.md) |
 | Infrastructure queues (inbox/outbox), reconciliation, processing | Implemented, tested (230 tests for the whole Infrastructure project) |
-| Host (`src/TeamsCallRecords.Host`): Graph webhook, REST API (`/api/cdr`, `/api/reprocess`, `/api/status`), health, background workers | Implemented, tested end to end (30 tests in `tests/TeamsCallRecords.Host.Tests`). Runs against an in-memory stand-in for Microsoft Graph |
-| Graph client for a live Microsoft 365 tenant | Not implemented. The interface exists; the Host uses the in-memory stand-in |
+| Host (`src/TeamsCallRecords.Host`): Graph webhook, REST API (`/api/cdr`, `/api/reprocess`, `/api/status`), health, background workers | Implemented, tested end to end (30 tests in `tests/TeamsCallRecords.Host.Tests`). Runs against an in-memory stand-in for Microsoft Graph (default) or live Microsoft Graph (`Graph:Mode=Live`) |
+| Graph client for a live Microsoft 365 tenant (`GraphClient`) | Implemented, tested against an HTTP stub in `tests/TeamsCallRecords.Infrastructure.Tests`. Subscription management is not implemented |
 | Teams bot, activity feed notifications to real users | Designed, require a live Microsoft 365 tenant |
-| Live Graph / Teams verification | Not done |
+| Live Graph / Teams verification | One real one-to-one call was read through Graph and returned as a CDR ([protocol](docs/LIVE_TEST_PROTOCOL.md)). Push notifications (subscriptions), bot and activity feed are not verified |
 
 ## F6 core
 
@@ -69,7 +69,7 @@ dotnet test
 
 ## Data policy
 
-No secrets, tokens, real identifiers or real call data in this repository. Test data are synthetic, built from the public Microsoft Graph resource structure. Third-party documentation and vendor sample CDRs are not used.
+No secrets, tokens or full real identifiers in this repository. The live test protocol contains only truncated identifiers and the timing of one test call between two test users of the author's own tenant. Test data are synthetic, built from the public Microsoft Graph resource structure. Third-party documentation and vendor sample CDRs are not used.
 
 ## License
 
