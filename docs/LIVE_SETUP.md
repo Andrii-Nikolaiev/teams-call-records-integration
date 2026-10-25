@@ -233,7 +233,7 @@ Expected: one subscription with `resource` `communications/callRecords`, `change
 
 ## 16. Place the call and watch the notification
 
-Place a call as in section 6 (about two minutes). Graph needs time to create the call record: in the test it was 12 minutes after the end of the call, and the notification reached the Host 0.24 seconds after that. The delay is Graph's and is not guaranteed. While waiting, the ngrok inspector (`http://127.0.0.1:4040`) lists the requests; the notification is a `POST /graph/notify` answered `202 Accepted`. The request body contains `clientState`, so do not publish screenshots of the raw body.
+Place a call as in section 6 (about two minutes). Graph may take time to publish a call record. In this test, the notification arrived about 12 minutes after the call ended. The earliest availability of the record was not measured, and this delay is not guaranteed. While waiting, the ngrok inspector (`http://127.0.0.1:4040`) lists the requests; the notification is a `POST /graph/notify` answered `202 Accepted`. The request body contains `clientState`, so do not publish screenshots of the raw body.
 
 Then read the CDR as in section 7 (`GET /api/cdr` with your key) and compare `call_id` with the call record id in the notification.
 

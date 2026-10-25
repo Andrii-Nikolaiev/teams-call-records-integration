@@ -142,7 +142,7 @@ The whole Host port was reachable through the tunnel during the test; `/api/*` w
 | 14:55:17 | `SubscriptionWorker` created the subscription |
 | 14:55:18 | Graph requested validation at `/graph/notify`; answered 200 |
 | 15:05:15 – 15:07:12 | Real one-to-one Teams call, 1 min 57 s |
-| 15:19:23.92 | Graph set `lastModifiedDateTime` of the call record (record available) |
+| 15:19:23.92 | Graph set `lastModifiedDateTime` of the call record |
 | 15:19:24.16 | `POST /graph/notify` received through the tunnel, answered **202 Accepted** (141.5 ms as measured by ngrok) |
 | 15:19:24.25 | Inbox row 2 created, `kind=callRecord`, call `2cc02d8c…` |
 | 15:19:25.35 | Inbox row 2 `done` (1 attempt) |
@@ -187,8 +187,8 @@ Graph `GET /subscriptions` returned one subscription with the tunnel notificatio
 
 ### 8.5 Observations
 
-- Graph needed about 12 minutes after the end of the call to create the record (15:07:12 to 15:19:23). The notification reached the Host 0.24 s after that. The Host's own part was a fraction of a second.
-- The record did not exist in Graph before 15:19:23, so no reconciliation run before that time could have produced it.
+- Graph reported `lastModifiedDateTime` as 15:19:23Z, about 12 minutes after the call ended at 15:07:12Z. The notification reached the Host at 15:19:24Z. The record's earliest availability was not independently measured.
+- The new call was processed through an inbox item of kind `callRecord`. No `reconcile` inbox item exists for this call, confirming that its recorded ingestion path was push rather than reconciliation.
 - The outbox `failed` counter grew by 2 for the new call: `POST /users/{id}/teamwork/sendActivityNotification` returns 403. This is the same open item as in test 1 and is unrelated to the subscription.
 
 ### 8.6 Not shown by this test
