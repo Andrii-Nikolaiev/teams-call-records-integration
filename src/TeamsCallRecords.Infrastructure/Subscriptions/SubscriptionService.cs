@@ -97,23 +97,25 @@ public sealed class SubscriptionService : ISubscriptionService
         var now = _clock.GetUtcNow();
         var mine = rows.Where(r => r.Kind == d.Kind).ToList();
 
-        // Rows that could serve notifications right now.
-        var live = mine.Where(r => (r.Status == SubscriptionStatuses.Active || r.Status == SubscriptionStatuses.Renewing)
-                                   && SameResource(r.Resource, d.Resource)
-                                   && UtcText.Parse(r.ExpiresUtc) > now).ToList();
-        var matching = live.Where(r => string.Equals(r.NotificationUrl, url, StringComparison.Ordinal)).ToList();
-        var foreign = live.Except(matching).ToList();
-        var best = matching.OrderByDescending(r => UtcText.Parse(r.ExpiresUtc)).ThenBy(r => r.Id, StringComparer.Ordinal).FirstOrDefault();
-
-        // ADR-0001 DV-1: the notification URL changed. Nothing is created or deleted before the owner decides.
-        if (best == null && foreign.Count > 0)
+        // ADR-0001 DV-1: a stored subscription of this resource that has not expired but points to another notification URL
+        // (whatever its status) means the URL changed. Nothing is created, renewed or deleted before the owner decides.
+        var foreign = mine.Where(r => SameResource(r.Resource, d.Resource)
+                                      && UtcText.Parse(r.ExpiresUtc) > now
+                                      && !string.Equals(r.NotificationUrl, url, StringComparison.Ordinal)).ToList();
+        if (foreign.Count > 0)
         {
             await _errors.WriteAsync(Components.Subscriptions, "subscription notification URL mismatch",
                 $"{d.Kind}: stored subscription {foreign[0].Id} uses {foreign[0].NotificationUrl}, configured {url}", ct);
             return false;
         }
 
-        foreach (var row in mine.Where(r => r != best && !foreign.Contains(r)))
+        // Rows that could serve notifications right now.
+        var best = mine.Where(r => (r.Status == SubscriptionStatuses.Active || r.Status == SubscriptionStatuses.Renewing)
+                                   && SameResource(r.Resource, d.Resource)
+                                   && UtcText.Parse(r.ExpiresUtc) > now)
+            .OrderByDescending(r => UtcText.Parse(r.ExpiresUtc)).ThenBy(r => r.Id, StringComparer.Ordinal).FirstOrDefault();
+
+        foreach (var row in mine.Where(r => r != best))
         {
             await DeleteInGraphQuietlyAsync(row.Id, ct);
             await _store.DeleteAsync(row.Id, ct);

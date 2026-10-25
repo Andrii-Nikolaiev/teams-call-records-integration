@@ -372,16 +372,42 @@ public class SubscriptionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Ensure_MismatchedRowNextToMatchingBest_IsKept()
+    public async Task Ensure_MismatchedRowNextToMatchingBest_LogsAndChangesNothing()
     {
-        await Seed("matching", expiresIn: TimeSpan.FromMinutes(4000));
+        await Seed("matching", expiresIn: TimeSpan.FromMinutes(2000));
         await Seed("other-url", expiresIn: TimeSpan.FromMinutes(3800), url: "https://old-tunnel.example.test/graph/notify");
 
         var ok = await _service.EnsureAsync(default);
 
-        Assert.True(ok);
+        Assert.False(ok);
         Assert.Empty(Fake.SubscriptionCalls);
         Assert.Equal(new[] { "matching", "other-url" }, (await _store.ListAsync(default)).Select(r => r.Id).OrderBy(x => x).ToArray());
+        Assert.Contains("subscription notification URL mismatch", await ErrorMessages());
+    }
+
+    [Fact]
+    public async Task Ensure_FailedRowWithOtherUrl_IsNotDeleted()
+    {
+        await Seed("failed-old-url", status: SubscriptionStatuses.Failed, url: "https://old-tunnel.example.test/graph/notify");
+
+        var ok = await _service.EnsureAsync(default);
+
+        Assert.False(ok);
+        Assert.Empty(Fake.SubscriptionCalls);
+        Assert.Equal("failed-old-url", Assert.Single(await _store.ListAsync(default)).Id);
+        Assert.Contains("subscription notification URL mismatch", await ErrorMessages());
+    }
+
+    [Fact]
+    public async Task Ensure_ExpiredRowWithOtherUrl_IsReplaced()
+    {
+        await Seed("expired-old-url", expiresIn: TimeSpan.FromMinutes(-1), url: "https://old-tunnel.example.test/graph/notify");
+
+        var ok = await _service.EnsureAsync(default);
+
+        Assert.True(ok);
+        Assert.Contains("delete:expired-old-url", Fake.SubscriptionCalls);
+        Assert.Equal("graph-sub-1", Assert.Single(await _store.ListAsync(default)).Id);
     }
 
     // ---- Lifecycle ----------------------------------------------------------------------------------------
