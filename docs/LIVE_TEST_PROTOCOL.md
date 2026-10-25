@@ -42,7 +42,7 @@ The client secret is supplied at start-up through an environment variable and is
 | 2 | List request | `GET /communications/callRecords?$filter=startDateTime ge … and startDateTime lt …` is accepted | HTTP 200 at 09:44:18Z, headers after 517 ms; 0 call records at that time (no calls had been made) | Pass |
 | 3 | Real call | Call is established and ends normally | Teams call log: outgoing, 1 min 17 s, started 10:16Z | Pass |
 | 4 | CDR is available through the API | One CDR for the call | `GET /api/cdr` returned exactly one item (see section 5) | Pass |
-| 5 | Duration | 77 s | `duration_seconds: 77` (`start_utc` 10:16:29Z, `end_utc` 10:17:47Z) | Pass |
+| 5 | Duration | 77 s | `duration_seconds: 77`; `start_utc` 10:16:29.7840111Z, `end_utc` 10:17:47.0839918Z, difference 77.30 s, rounded to the nearest second | Pass |
 | 6 | Caller identity | Object id of the calling user | `caller.id` equals the user's object id shown in Microsoft Entra | Pass |
 | 7 | Call classification | One-to-one audio call | `call_type: oneToOne`, `modalities: [audio]`, `status: completed`, `segment_count: 1`, `aggregation_status: complete` | Pass |
 
@@ -78,7 +78,7 @@ The client secret is supplied at start-up through an environment variable and is
 ## 6. What this does and does not show
 
 Shown:
-- The live Graph client (token, request, response parsing, pagination code path) works against a real tenant.
+- The live Graph client (token, request, response parsing) works against a real tenant. Paging through `@odata.nextLink` was not observed with real data.
 - `CallRecords.Read.All` as an application permission is sufficient to read the record of a call between two users of the tenant.
 - A real call is converted into a CDR by the existing pipeline without changes to the Core.
 - The `$filter` on `startDateTime` for the call record list, which the design marked as unverified (`[P-proposed]`), is accepted by Graph (HTTP 200).
