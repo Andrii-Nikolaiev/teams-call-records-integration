@@ -16,9 +16,24 @@ AddValidated<WebhookOptions>(builder, "Webhook", o => o.Validate());
 builder.Services.AddOptions<DemoOptions>().Bind(builder.Configuration.GetSection("Demo"));
 builder.Services.AddSingleton<ReadinessState>();
 
-// Demo mode: an in-memory stand-in for Microsoft Graph (the real client needs a Microsoft 365 tenant).
-builder.Services.AddSingleton<InMemoryGraphClient>();
-builder.Services.AddSingleton<IGraphClient>(sp => sp.GetRequiredService<InMemoryGraphClient>());
+// Graph:Mode selects the IGraphClient. Demo (default): an in-memory stand-in, no Microsoft 365 tenant needed.
+// Live: the real Microsoft Graph client; the demo endpoints (which need the in-memory client) must be off.
+var graphMode = builder.Configuration["Graph:Mode"] ?? "Demo";
+if (graphMode.Equals("Live", StringComparison.OrdinalIgnoreCase))
+{
+    if (builder.Configuration.GetValue<bool>("Demo:Enabled"))
+        throw new InvalidOperationException("Graph:Mode=Live requires Demo:Enabled=false (set Demo__Enabled=false)");
+    builder.Services.AddTcriGraphClient();
+}
+else if (graphMode.Equals("Demo", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<InMemoryGraphClient>();
+    builder.Services.AddSingleton<IGraphClient>(sp => sp.GetRequiredService<InMemoryGraphClient>());
+}
+else
+{
+    throw new InvalidOperationException($"Graph:Mode must be Demo or Live, got '{graphMode}'");
+}
 
 builder.Services.AddHostedService<InboxWorker>();
 builder.Services.AddHostedService<OutboxWorker>();

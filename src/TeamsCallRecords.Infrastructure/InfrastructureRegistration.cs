@@ -1,3 +1,5 @@
+using Azure.Core;
+using Azure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +9,7 @@ using Microsoft.Extensions.Options;
 using TeamsCallRecords.Infrastructure.Config;
 using TeamsCallRecords.Infrastructure.Data;
 using TeamsCallRecords.Infrastructure.Diagnostics;
+using TeamsCallRecords.Infrastructure.Graph;
 using TeamsCallRecords.Infrastructure.Outbox;
 using TeamsCallRecords.Infrastructure.Processing;
 using TeamsCallRecords.Infrastructure.Queue;
@@ -52,6 +55,29 @@ public static class InfrastructureRegistration
         services.AddSingleton<IReconciler, Reconciler>();
         services.AddSingleton<IOutboxSender, OutboxSender>();
         return services;
+    }
+
+    /// <summary>
+    /// Registers the real Microsoft Graph client (TRP 3.14, 3.18): typed IGraphClient, token from
+    /// ClientSecretCredential, resilience pipeline. Requires AddTcriInfrastructure; adds the live-only options rules.
+    /// </summary>
+    public static IHttpClientBuilder AddTcriGraphClient(this IServiceCollection services)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<IValidateOptions<GraphOptions>>(new DelegateOptionsValidator<GraphOptions>(o => o.ValidateLive()));
+        services.TryAddSingleton<TokenCredential>(sp =>
+        {
+            var o = sp.GetRequiredService<IOptions<GraphOptions>>().Value;
+            return new ClientSecretCredential(o.TenantId, o.ClientId, o.ClientSecret);
+        });
+        services.AddSingleton<GraphResiliencePipeline>();
+        services.AddTransient<GraphResilienceHandler>();
+
+        return services.AddHttpClient<IGraphClient, GraphClient>()
+            .ConfigureHttpClient(c => c.Timeout = Timeout.InfiniteTimeSpan)   // timeouts are owned by the resilience pipeline
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2) })
+            .SetHandlerLifetime(Timeout.InfiniteTimeSpan)   // IGraphClient is used by singletons; connection lifetime above handles DNS changes
+            .AddHttpMessageHandler<GraphResilienceHandler>();
     }
 
     private static void AddSection<T>(IServiceCollection services, IConfiguration configuration, string name,
