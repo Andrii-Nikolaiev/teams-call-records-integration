@@ -2,8 +2,8 @@
 
 Open-source integration that reads Microsoft Teams call records through Microsoft Graph (Entra ID, app-only), converts every call session into a CDR, stores the result in SQLite and exposes it through a REST API. Calls reach the system by two routes: Graph change notifications (push) and periodic reconciliation. A Teams bot answers two text commands (`help`, `calls today`); activity feed notifications to users are implemented but did not work on the tested tenant. See the status below. C# / .NET 8.
 
-> **Status: engineering prototype (v0.1.0 plus the Teams bot on `main`, not yet released). Not production-ready.**
-> The core, data layer, processing pipeline, Graph client, subscription management and HTTP interface are implemented. They run in demo mode with an in-memory Graph stand-in, or against a live Microsoft 365 tenant (`Graph:Mode=Live`). Both ingestion routes have been verified end to end with real Teams calls on a trial tenant: periodic reconciliation (test 1) and Graph push notifications through a subscription created by the Host itself (test 2). The Teams bot (`help`, `calls today`, added after v0.1.0) was then verified in the same tenant with a real call and real Teams messages (test 3). See the [live test protocol](docs/LIVE_TEST_PROTOCOL.md). Activity feed delivery failed in every test; see the limitations below.
+> **Status: engineering prototype (v0.2.0). Not production-ready.**
+> The core, data layer, processing pipeline, Graph client, subscription management and HTTP interface are implemented. They run in demo mode with an in-memory Graph stand-in, or against a live Microsoft 365 tenant (`Graph:Mode=Live`). Both ingestion routes have been verified end to end with real Teams calls on a trial tenant: periodic reconciliation (test 1) and Graph push notifications through a subscription created by the Host itself (test 2). The Teams bot (`help`, `calls today`, added in v0.2.0) was then verified in the same tenant with a real call and real Teams messages (test 3). See the [live test protocol](docs/LIVE_TEST_PROTOCOL.md). Activity feed delivery failed in every test; see the limitations below.
 
 ## What works now
 
@@ -19,7 +19,7 @@ The solution has 507 automated tests (`dotnet test`: 507 total, 0 failed); none 
 | **Subscription management** ([ADR-0001](docs/ADR-0001-subscription-service.md)): `SubscriptionWorker` / `SubscriptionService` create, renew and recover the `communications/callRecords` subscription; lifecycle notifications are handled | Implemented. Active when `Graph:NotificationUrl` is set. Creation verified live; renewal and lifecycle handling are covered by automated tests only |
 | Host (`src/TeamsCallRecords.Host`): Graph webhook (`/graph/notify`, `/graph/lifecycle`), REST API (`/api/cdr`, `/api/reprocess`, `/api/status`), health, background workers | Implemented. Runs against an in-memory stand-in for Microsoft Graph (default) or live Microsoft Graph (`Graph:Mode=Live`) |
 | Graph client for a live Microsoft 365 tenant (`GraphClient`) | Implemented: token, call record list and get with paging, subscription calls, activity notification call, retry and timeout policies |
-| **Teams bot** (`src/TeamsCallRecords.Host/Bot`, Teams SDK 2.1.1): `POST /api/messages`, commands `help` and `calls today` | Implemented after v0.1.0, not yet in a release. Verified live in a personal chat (test 3); see [Teams bot](#teams-bot) |
+| **Teams bot** (`src/TeamsCallRecords.Host/Bot`, Teams SDK 2.1.1): `POST /api/messages`, commands `help` and `calls today` | Implemented in v0.2.0. Verified live in a personal chat (test 3); see [Teams bot](#teams-bot) |
 
 ### Verified on a real tenant
 

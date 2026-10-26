@@ -2,9 +2,13 @@
 
 All notable changes to this project are recorded here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-26
 
-Changes on `main` after v0.1.0. No version number has been assigned.
+Second tagged version: adds the Teams bot. It is still an engineering prototype and **not production-ready**; see Known limitations.
+
+### Changed
+
+- The commit messages of the history up to v0.1.0 were rewritten in English, and the tag `v0.1.0` now points to the rewritten commit. File contents are unchanged. Anyone who cloned the repository earlier should fetch the tags again.
 
 ### Added
 

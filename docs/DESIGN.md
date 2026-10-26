@@ -2,7 +2,7 @@
 
 Teams Call Records Integration (TCRI) is a standalone .NET 8 application that turns Microsoft Teams call records into CDRs (call detail records) and exposes them through REST. A Teams bot and activity-feed notifications are part of the design; their status is given in [Verification levels](#verification-levels).
 
-**Status of this document:** a summary of the design as of v0.1.0 plus the Teams bot on `main` (not yet released). Ingestion by reconciliation and by Graph push notifications, and the Teams bot, have been run against a live Microsoft 365 trial tenant; activity-feed delivery failed in all live tests. See [Verification levels](#verification-levels), the [live test protocol](LIVE_TEST_PROTOCOL.md) and [ADR-0001](ADR-0001-subscription-service.md) (subscription management).
+**Status of this document:** a summary of the design as of v0.2.0. Ingestion by reconciliation and by Graph push notifications, and the Teams bot, have been run against a live Microsoft 365 trial tenant; activity-feed delivery failed in all live tests. See [Verification levels](#verification-levels), the [live test protocol](LIVE_TEST_PROTOCOL.md) and [ADR-0001](ADR-0001-subscription-service.md) (subscription management).
 
 ## 1. Scope
 
@@ -93,7 +93,7 @@ Rules implemented by the Core (`src/TeamsCallRecords.Core`):
 | --- | --- | --- |
 | POST | `/graph/notify` | Graph validation token / clientState check |
 | POST | `/graph/lifecycle` | subscription lifecycle events |
-| POST | `/api/messages` | Bot Framework token, validated by the Teams SDK (401 without a valid token). Added after v0.1.0 |
+| POST | `/api/messages` | Bot Framework token, validated by the Teams SDK (401 without a valid token). Added in v0.2.0 |
 | GET | `/api/cdr` | `X-TCRI-Key` |
 | POST | `/api/reprocess` | `X-TCRI-Key` (durable job, `202`) |
 | GET | `/api/status`, `/health/live`, `/health/ready` | key / open health |
@@ -122,4 +122,4 @@ The project never reports a result that was not produced.
 1. Core (F6) — implemented.
 2. Infrastructure — EF Core + SQLite, queues, Graph client, subscription management (ADR-0001) — implemented.
 3. Host — webhook, REST, health — implemented.
-4. Live tenant — reconciliation and push verified (v0.1.0), Teams bot verified in a personal chat (test 3, unreleased); open: activity-feed 403, signed-token tests for the bot, bot in group chats and channels, observing renewal and lifecycle events live, group and PSTN calls.
+4. Live tenant — reconciliation and push verified (v0.1.0), Teams bot verified in a personal chat (test 3, v0.2.0); open: activity-feed 403, signed-token tests for the bot, bot in group chats and channels, observing renewal and lifecycle events live, group and PSTN calls.
