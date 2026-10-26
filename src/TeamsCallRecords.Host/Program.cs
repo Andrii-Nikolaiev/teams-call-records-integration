@@ -1,4 +1,7 @@
 using TeamsCallRecords.Host;
+using Microsoft.Teams.Apps;
+using TeamsCallRecords.Host.Bot;
+using TeamsCallRecords.Host.Config;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TeamsCallRecords.Host.Demo;
@@ -16,6 +19,11 @@ AddValidated<ApiOptions>(builder, "Api", o => o.Validate());
 AddValidated<WebhookOptions>(builder, "Webhook", o => o.Validate());
 builder.Services.AddOptions<DemoOptions>().Bind(builder.Configuration.GetSection("Demo"));
 builder.Services.AddSingleton<ReadinessState>();
+
+// Teams bot (TRP 3.24): /api/messages is served and authenticated by the Teams SDK (settings: section "AzureAd", environment only for the secret).
+AddValidated<BotOptions>(builder, "Bot", o => o.Validate());
+builder.Services.AddSingleton<BotCommands>();
+builder.Services.AddTeamsBotApplication();
 
 // Subscriptions (ADR-0001): the marker and the validator live in the Host, the service and the store in Infrastructure.
 builder.Services.AddSingleton<PendingSubscriptionRegistry>();
@@ -56,6 +64,10 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async ctx =>
     var result = ApiError.Result(ctx, StatusCodes.Status500InternalServerError, "internal_error", "Unexpected error");
     await result.ExecuteAsync(ctx);
 }));
+
+var botTimeZone = app.Services.GetRequiredService<IOptions<BotOptions>>().Value.ResolveTimeZone();
+var teamsBot = app.UseTeamsBotApplication();
+TcriBot.RegisterHandlers(teamsBot, app.Services.GetRequiredService<BotCommands>(), app.Services.GetRequiredService<TimeProvider>(), botTimeZone);
 
 app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
 app.MapGet("/health/ready", (ReadinessState readiness) =>
