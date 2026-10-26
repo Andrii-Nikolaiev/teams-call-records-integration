@@ -195,7 +195,7 @@ Graph `GET /subscriptions` returned one subscription with the tunnel notificatio
 
 - Subscription renewal, `reauthorizationRequired`, `subscriptionRemoved` and `missed` lifecycle notifications were not observed live; they are covered by automated tests with a fake Graph client only.
 - `/graph/lifecycle` and the health routes were not probed from outside.
-- `/api/status` reported `"mode":"demo"` in live mode during this test (a hard-coded value, fixed in commit `fd57178`; the corrected value has not been observed in a live run yet).
+- `/api/status` reported `"mode":"demo"` in live mode during this test (a hard-coded value, fixed in commit `b500514`; the corrected value has not been observed in a live run yet).
 - One call on one tenant, through a temporary tunnel: a functional check, not a reliability test.
 
 ### 8.7 Reproducing
@@ -212,7 +212,7 @@ Graph `GET /subscriptions` returned one subscription with the tunnel notificatio
 | | |
 | --- | --- |
 | Date | 2026-10-26 (UTC; Kyiv was UTC+2, the daylight saving change was on 2026-10-25) |
-| Software | TCRI, repository commit `6ee9d00` (`main`), 507 automated tests passing, run locally from source |
+| Software | TCRI, repository commit `b7a1b07` (`main`), 507 automated tests passing, run locally from source |
 | Result | **Passed for the scope below.** Real Teams messages were answered by the bot; after a real call, delivered by a Graph push notification, the bot reported the call with the same duration as the Teams call log |
 
 ### 9.1 Environment

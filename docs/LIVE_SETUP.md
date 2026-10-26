@@ -79,7 +79,7 @@ The dates above belong to the first test; replace them with the date of your cal
 
 Expected in the first test: one item with `call_type` `oneToOne`, `status` `completed`, `aggregation_status` `complete`, `segment_count` 1, `caller.id` equal to the calling user's object ID in Entra, and `duration_seconds` equal to the call duration rounded to the nearest second.
 
-`GET /api/status` (same header) shows inbox and outbox counters and the time of the last reconciliation. Its `mode` field shows the mode the Host runs in (`demo` or `live`). Before commit `fd57178` it always read `demo`, even in live mode.
+`GET /api/status` (same header) shows inbox and outbox counters and the time of the last reconciliation. Its `mode` field shows the mode the Host runs in (`demo` or `live`). Before commit `b500514` it always read `demo`, even in live mode.
 
 ## 8. Check the database
 
