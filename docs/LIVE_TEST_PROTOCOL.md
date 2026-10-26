@@ -6,7 +6,7 @@
 | Tester | Andrii Nikolaiev |
 | Software | TCRI, repository commit `0d7e901` (`main`), run locally from source |
 | Result | **Passed for the scope below.** A real one-to-one Teams call produced one CDR in `GET /api/cdr` |
-| Second test | Sections 1–7 describe test 1 (reconciliation, no subscription). Test 2, the push path through a Graph subscription, is in section 8 |
+| Further tests | Sections 1–7 describe test 1 (reconciliation, no subscription). Test 2, the push path through a Graph subscription, is in section 8. Test 3, the Teams bot, is in section 9 |
 
 ## 1. Purpose
 
@@ -206,3 +206,80 @@ Graph `GET /subscriptions` returned one subscription with the tunnel notificatio
 4. Check the public surface as in 8.2, then place a Teams call between the two users and end it.
 5. Wait for the notification (about 12 minutes in this test), then query `GET /api/cdr` and read the inbox row of the call with `sqlite3 -readonly` (columns other than `raw`): `kind=callRecord` shows that the notification, not a reconciliation run, brought the call in.
 6. Close the tunnel. The subscription expires by itself.
+
+## 9. Test 3: Teams bot (personal chat)
+
+| | |
+| --- | --- |
+| Date | 2026-10-26 (UTC; Kyiv was UTC+2, the daylight saving change was on 2026-10-25) |
+| Software | TCRI, repository commit `6ee9d00` (`main`), 507 automated tests passing, run locally from source |
+| Result | **Passed for the scope below.** Real Teams messages were answered by the bot; after a real call, delivered by a Graph push notification, the bot reported the call with the same duration as the Teams call log |
+
+### 9.1 Environment
+
+Same tenant, users and Entra app registration as tests 1 and 2, with these additions:
+
+| Item | Value |
+| --- | --- |
+| Bot | Registered in the Teams Developer Portal (Tools, Bot management), without an Azure subscription. Teams SDK `Microsoft.Teams.Apps` 2.1.1 in the Host |
+| Teams app | `TCRI`, bot feature, personal scope, installed in Teams as a custom app for the tenant administrator. The tenant's app setup policy had to allow custom app upload |
+| Messaging endpoint | `https://<random>.ngrok-free.app/api/messages` (ngrok free plan) forwarding to `https://localhost:44396` |
+| Bot credentials | Bot id and a client secret of the bot, supplied through environment variables `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientCredentials__0__SourceType`, `AzureAd__ClientCredentials__0__ClientSecret`; nothing is stored in the repository |
+| Bot setting | `Bot:TimeZoneId` left at its default `Europe/Kyiv` |
+| Runs | A first run in demo mode (in-memory Graph stand-in, one synthetic call from `demo/demo.sh`, real Teams and Bot Framework) to check the commands, then a run in live mode (`Graph:Mode=Live`, the data directory of test 2, which already held the two calls of 2026-10-25, and the subscription created in test 2, still held by Graph) to check the bot with a real call |
+
+### 9.2 Commands (demo mode, real Teams messages)
+
+Message times are the times shown by Teams, converted to UTC.
+
+| Time | Message | Answer |
+| --- | --- | --- |
+| 15:04 | `help` | `Commands: help; calls today.` |
+| 15:06 | `calls today` (no calls stored) | `Today (Europe/Kyiv): no calls recorded.` |
+| 15:06 | `Calls Today` | `Today (Europe/Kyiv): no calls recorded.` |
+| 15:07 | `hello` | `Unknown command. Type help.` |
+| 15:16 | `calls today` (after one synthetic call) | `Today (Europe/Kyiv): 1 call, total session duration 00:01:00.` |
+
+### 9.3 Real call (live mode)
+
+| Time (UTC) | Event |
+| --- | --- |
+| 16:56:55 – 16:59:54 | Real one-to-one Teams call from the administrator to `TCRI Test`; Teams call log: outgoing, 2 min 59 s |
+| 17:21:18.53 | Graph notification stored: inbox row 3, `kind=callRecord`, call `fa3b0bee…`, received |
+| 17:21:19.73 | Inbox row 3 `done` after one attempt |
+| 17:55:38 | Message `calls today` answered; the reply was posted to the regional Bot Framework service (`smba.trafficmanager.net`) and accepted with HTTP 201 |
+
+The bot answered:
+
+```
+Today (Europe/Kyiv): 1 call, total session duration 00:02:59.
+```
+
+Evidence in the database (a copy of the SQLite files, opened read-only):
+
+- The `cdr` table holds three rows: the calls of test 1 (2026-10-25 10:16Z) and test 2 (2026-10-25 15:05Z), and the new call. The new row has `call_id` and `session_id` `fa3b0bee…`, `source_version` 1, `call_type` `oneToOne`, `start_utc` 2026-10-26T16:56:55.0590242Z, `end_utc` 2026-10-26T16:59:54.5305614Z, `duration_s` 179, `status` `completed`, `segment_count` 1, `aggregation_status` `complete`. The difference of the timestamps is 179.47 s, rounded to 179 s, which is 00:02:59 and equals the Teams call log.
+- The local day of 2026-10-26 in Kyiv starts at 2026-10-25T22:00:00Z. The two earlier calls start before that moment, so the answer counted exactly one call of three stored.
+- The new call entered through a notification (`kind=callRecord`) of the same subscription that delivered the notification of test 2, as the subscription id in the inbox rows shows.
+- The outbox holds two new rows for this call, both `failed` after one attempt (HTTP 403 from `sendActivityNotification`): the open item from tests 1 and 2. The bot does not depend on it.
+
+### 9.4 Automated tests
+
+507 tests pass (490 before the bot). The 17 new tests are `BotCommandsTests` (14 cases: help, no calls, three calls, a time zone boundary, the daylight saving day of 2026-10-25 which is 25 hours long in Kyiv, unknown commands, capitalisation and spacing, duration as the sum of sessions) and `BotAuthenticationTests` (3 cases: `/api/messages` answers 401 when the bot is not configured, without a bearer token and with a malformed one).
+
+### 9.5 Observations
+
+- The Teams SDK validated real Teams tokens (messages were processed) and rejects requests without a valid token (automated tests). The negative signed-token cases are not covered; see 9.6.
+- During setup the first reply failed because the bot secret was supplied as `AzureAd:ClientSecret`. The SDK reads it from `AzureAd:ClientCredentials:0:ClientSecret`.
+- On the tester's Windows machine the time zone id `Europe/Kyiv` was unknown and 70 tests failed. The Host now falls back to `Europe/Kiev` and `FLE Standard Time`; the label in the answer is always the configured id.
+- Graph sent the notification about 21 minutes after the call ended (12 minutes in test 2). The bot shows a call only after it is ingested, so `calls today` right after a call reports no call.
+
+### 9.6 Not shown by this test
+
+- Only the personal chat of one user, the tenant administrator, was tested. Group chats, channels, other users and RSC were not.
+- Signed-token cases for `/api/messages` (bad signature, wrong audience, expired, valid) are not covered by automated tests; only three unauthenticated cases are.
+- Calls with more than one session were not tested live (the sum of sessions is covered by an automated test).
+- Answers are in English only. One tenant, one tester, a temporary tunnel: a functional check, not a reliability or security test.
+
+### 9.7 Reproducing
+
+See Part C of [LIVE_SETUP.md](LIVE_SETUP.md).

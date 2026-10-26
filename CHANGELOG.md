@@ -2,6 +2,32 @@
 
 All notable changes to this project are recorded here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+Changes on `main` after v0.1.0. No version number has been assigned.
+
+### Added
+
+- **Teams bot** (`src/TeamsCallRecords.Host/Bot`, Teams SDK 2.1.1, package `Microsoft.Teams.Apps`): `POST /api/messages`, authenticated by the SDK (401 without a valid token). Commands `help` and `calls today` (trimmed, case-insensitive, answers in English). "Today" is the local day in `Bot:TimeZoneId` (default `Europe/Kyiv`, with fallbacks `Europe/Kiev` and `FLE Standard Time` for systems that do not know the current id); days with a daylight saving change are handled. The answer counts the CDRs whose start falls in that day: distinct calls and the summed session duration.
+- Bot settings: `AzureAd:TenantId`, `AzureAd:ClientId`, `AzureAd:ClientCredentials:0:SourceType` / `ClientSecret` (the secret goes in the environment only), and `Bot:TimeZoneId`.
+- **Tests**: 17 new automated tests (14 for the bot commands, including time zone and daylight saving cases, and 3 for the unauthenticated requests to `/api/messages`): 507 in total, 0 failed.
+- **Documentation**: Teams bot section in the README, test 3 in the live test protocol, Part C in the live setup guide.
+
+### Verified
+
+Test 3 on 2026-10-26 against the same Microsoft 365 trial tenant. Evidence and limits are in [docs/LIVE_TEST_PROTOCOL.md](docs/LIVE_TEST_PROTOCOL.md).
+
+- Real Teams messages in a personal chat reached `/api/messages` through ngrok and were accepted by the SDK authentication; the bot replied through Bot Framework. `help`, `calls today` (no calls, and one call), a differently capitalised command and an unknown command were answered as specified.
+- A real one-to-one call of 2 min 59 s reached the Host through a Graph push notification and was converted into one CDR of 179 s. The bot then answered `Today (Europe/Kyiv): 1 call, total session duration 00:02:59.`, equal to the Teams call log. The database also held two calls of the previous day, and only the call of the current day was counted.
+
+### Known limitations
+
+- The bot was tested in one personal chat with one user on one trial tenant, through ngrok. Group chats, channels, other users and RSC were not tested.
+- Automated tests cover three unauthenticated requests to `/api/messages` (all answered 401). Signed-token cases (bad signature, wrong audience, expired, valid) are not covered by automated tests.
+- Answers are in English only. The bot reads the local database, so a call appears in `calls today` only after it has been ingested (about 12 to 21 minutes after the end of a call in the live tests).
+- Activity feed notifications to users still returned HTTP 403 in test 3; the cause was not investigated.
+- The other limitations of v0.1.0 remain.
+
 ## [0.1.0] - 2026-10-25
 
 First tagged version: an engineering prototype that has been run against a real Microsoft 365 tenant. It is **not production-ready**; see Known limitations.

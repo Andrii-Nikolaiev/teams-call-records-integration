@@ -1,17 +1,18 @@
 # Reproducing the live tests
 
-This guide reproduces the two live tests of TCRI done on 2026-10-25 (results in [LIVE_TEST_PROTOCOL.md](LIVE_TEST_PROTOCOL.md)):
+This guide reproduces the three live tests of TCRI (tests 1 and 2 on 2026-10-25, test 3 on 2026-10-26; results in [LIVE_TEST_PROTOCOL.md](LIVE_TEST_PROTOCOL.md)):
 
 - **Part A (sections 2–10), test 1: reconciliation only.** One real one-to-one Teams call is read from Microsoft Graph by the periodic reconciliation, converted into a CDR, stored in SQLite and returned by `GET /api/cdr`. No public address is needed.
 - **Part B (sections 11–19), test 2: push through a Graph subscription.** The Host creates the subscription itself, Graph delivers a notification for a real call to `/graph/notify` through a public tunnel, and the resulting CDR is returned by `GET /api/cdr`. Do Part A's sections 2–3 (prerequisites and app registration) first; Part B needs the same tenant, users and application.
+- **Part C (sections 20–25), test 3: Teams bot.** The bot is registered in the Teams Developer Portal, the Teams app is installed for a user, and the bot answers `help` and `calls today` in a personal chat, including for a real call stored through Part B. Part C builds on Part B.
 
 ## 1. Read this first: what is and is not covered
 
 - The Host manages Graph subscriptions only when `Graph:NotificationUrl` is set (ADR-0001 D4). Without it the Host only polls, and a call record reaches TCRI through the periodic reconciliation (every 15 minutes by default). Part A uses that mode; test 1 itself ran on commit `0d7e901`, before the subscription service existed.
 - Part B was tested once, with ngrok (free plan) as the tunnel. Microsoft Dev Tunnels is the tunnel named in ADR-0001 D1; its commands were checked against Microsoft's documentation only, and no test was run with it.
 - Subscription renewal, `reauthorizationRequired`, `subscriptionRemoved` and `missed` lifecycle notifications were not observed live; they are covered by automated tests with a fake Graph client only.
-- Activity notifications to users are not working. In both tests they returned HTTP 403, the cause was not investigated, and the outbox rows ended in state `failed`. Successful delivery is not confirmed; whether it works in another configuration depends on permissions and the Teams setup.
-- The Teams bot is not implemented.
+- Activity notifications to users are not working. In all three tests they returned HTTP 403, the cause was not investigated, and the outbox rows ended in state `failed`. Successful delivery is not confirmed; whether it works in another configuration depends on permissions and the Teams setup.
+- The Teams bot was tested once (Part C): one personal chat, one user, one trial tenant, ngrok as the tunnel. Group chats, channels and RSC were not tested, and signed-token cases of `/api/messages` are not covered by automated tests.
 - Each test was one call on one trial tenant. This guide is not production guidance.
 
 ## 2. Prerequisites
@@ -279,3 +280,65 @@ Remove-Item Env:\Graph__ClientSecret, Env:\Graph__ClientState, Env:\Api__Key -Er
 - A notification answered 403: the `clientState` or the tenant does not match the subscription. A forged request in section 14 is expected to be answered this way.
 - Notification received but no CDR: check `inbox` (`state`, `attempts`, `last_error`) and `GET /api/status`.
 - Failed outbox rows with HTTP 403: the open item from section 1; it does not affect the subscription or the CDR.
+
+# Part C: Teams bot
+
+## 20. What changes compared with Part B
+
+The Host also serves `POST /api/messages`, where Teams delivers the messages sent to the bot, so the tunnel of section 12 must forward to the Host (it already does in Part B). The bot answers from the local database, so it shows a call only after the call has been ingested: use the live mode of Part B for a real call, or the demo mode (section "Demo" in `README.md`) to check the commands only.
+
+Settings added to the PowerShell session (`__` stands for `:`):
+
+| Setting | Meaning |
+| --- | --- |
+| `AzureAd__TenantId` | The tenant id (the same as `Graph__TenantId`) |
+| `AzureAd__ClientId` | The id of the **bot** from the Developer Portal, not the id of the Graph application |
+| `AzureAd__ClientCredentials__0__SourceType` | `ClientSecret` |
+| `AzureAd__ClientCredentials__0__ClientSecret` | The client secret of the bot. The key `AzureAd__ClientSecret` is **not** read |
+| `Bot__TimeZoneId` | Optional. Defines "today" for `calls today`; default `Europe/Kyiv` |
+
+Without the `AzureAd` settings the Host still starts and `/api/messages` answers 401, so the bot is simply not reachable.
+
+## 21. Register the bot and install the Teams app
+
+1. **Allow custom apps.** In the Teams admin center open Teams apps, Setup policies, the policy that applies to the tester, and turn on the permission to upload custom apps. A policy change can take some time to apply.
+2. **Register the bot.** Open `https://dev.teams.microsoft.com/tools/bots` (Teams Developer Portal, Tools, Bot management), create a new bot, note its id, add a client secret and copy it at once (it is shown once). Set the endpoint address of the bot to `https://YOUR_TUNNEL_HOST/api/messages` and save. No Azure subscription was needed in the test.
+3. **Create the Teams app.** In the Developer Portal create an app, fill the required basic information, add the Bot feature, select the bot from step 2 and the Personal scope, and save.
+4. **Install it** in Teams for the tester as a custom app.
+
+The ngrok free plan gives a new address each time it starts; after a restart the endpoint address in step 2 must be changed.
+
+## 22. Start the Host with the bot settings
+
+Use the session and the start command of section 13, variant A, and add before `dotnet run`:
+
+```
+$env:AzureAd__TenantId = 'YOUR_TENANT_GUID'
+$env:AzureAd__ClientId = 'YOUR_BOT_ID'
+$env:AzureAd__ClientCredentials__0__SourceType = 'ClientSecret'
+$sec = Read-Host -Prompt 'Bot client secret' -AsSecureString
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+try { $env:AzureAd__ClientCredentials__0__ClientSecret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+Remove-Variable sec, bstr
+```
+
+## 23. Check the bot
+
+1. Without a token the endpoint must refuse: `curl.exe -i -X POST https://YOUR_TUNNEL_HOST/api/messages -H "Content-Type: application/json" -d "{}"` should answer HTTP 401. This case is covered by automated tests; it was not run through the tunnel.
+2. In Teams open the chat with the bot and send these messages. Expected answers: `help` gives `Commands: help; calls today.`; `calls today` gives `Today (Europe/Kyiv): no calls recorded.` while the database holds no call of the current day; `Calls Today` is answered like `calls today`; `hello` gives `Unknown command. Type help.`
+3. Place a call as in section 16 and wait for the notification (12 and 21 minutes in the two tests that measured it). Send `calls today`. The answer must show 1 call and the duration of the call (`GET /api/cdr` shows `duration_seconds`; the Teams call log should agree). Sent right after the call, `calls today` still answers that no call is recorded.
+
+## 24. Finish safely
+
+1. Stop the Host (Ctrl+C), then the tunnel.
+2. Delete the client secret of the bot in the Developer Portal and, if you no longer need the app, remove the Teams app and turn off the custom app upload permission again.
+3. Finish the Graph side as in section 18.
+
+## 25. Troubleshooting (Part C)
+
+- The bot does not answer and the Host log shows no request: the endpoint address in the Developer Portal still points to an old tunnel address, or the tunnel is down.
+- The Host log shows the incoming message but the reply does not reach Teams: check that the bot secret is supplied as `AzureAd__ClientCredentials__0__ClientSecret` and belongs to the bot whose id is in `AzureAd__ClientId`.
+- `calls today` answers that no call is recorded after a real call: the call has not been ingested yet. Check `GET /api/status` and the `inbox` table as in section 17; restarting the Host triggers an immediate reconciliation.
+- The Host does not start, or tests fail, with a time zone error on Windows: the system may not know the id `Europe/Kyiv`. The Host falls back to `Europe/Kiev` and `FLE Standard Time`; for any other zone set `Bot__TimeZoneId` to an id the system knows.
+- The custom app cannot be uploaded: the app setup policy of the user does not allow it (step 1 of section 21).

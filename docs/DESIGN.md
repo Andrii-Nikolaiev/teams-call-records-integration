@@ -2,14 +2,14 @@
 
 Teams Call Records Integration (TCRI) is a standalone .NET 8 application that turns Microsoft Teams call records into CDRs (call detail records) and exposes them through REST. A Teams bot and activity-feed notifications are part of the design; their status is given in [Verification levels](#verification-levels).
 
-**Status of this document:** a summary of the design as of v0.1.0. Ingestion by reconciliation and by Graph push notifications has been run against a live Microsoft 365 trial tenant; the Teams bot is not implemented and activity-feed delivery failed in both live tests. See [Verification levels](#verification-levels), the [live test protocol](LIVE_TEST_PROTOCOL.md) and [ADR-0001](ADR-0001-subscription-service.md) (subscription management).
+**Status of this document:** a summary of the design as of v0.1.0 plus the Teams bot on `main` (not yet released). Ingestion by reconciliation and by Graph push notifications, and the Teams bot, have been run against a live Microsoft 365 trial tenant; activity-feed delivery failed in all live tests. See [Verification levels](#verification-levels), the [live test protocol](LIVE_TEST_PROTOCOL.md) and [ADR-0001](ADR-0001-subscription-service.md) (subscription management).
 
 ## 1. Scope
 
 - Read call records from Microsoft Graph (`communications/callRecords`) with an Entra ID app-only identity and the minimum Graph / RSC permissions.
 - Produce **one CDR per session**. Segments inside a session are counted but never summed, because they may overlap.
 - Keep every version of a call record that matters: a higher version replaces the stored CDRs, a lower one is ignored, the same version with different content is audited.
-- Report through a REST API (`X-TCRI-Key`), a Teams bot (`help`, `calls today`; designed, not implemented) and activity-feed notifications (sender implemented, not working on the tested tenant).
+- Report through a REST API (`X-TCRI-Key`), a Teams bot (`help`, `calls today`; implemented, verified live in test 3) and activity-feed notifications (sender implemented, not working on the tested tenant).
 - Out of scope: media recording, selling call data, any third-party vendor CDR formats.
 
 ## 2. Architecture
@@ -27,7 +27,7 @@ flowchart LR
     GC[GraphClient]
     CORE[Core F6]
     API[REST API]
-    BOT[Teams bot - not implemented]
+    BOT[Teams bot: help, calls today]
     REC[Reconciler]
     OB[OutboxSender - implemented, HTTP 403 in live tests]
   end
@@ -39,15 +39,16 @@ flowchart LR
   Graph -->|notification| WH --> IN --> GC --> CORE --> STATE
   Entra -->|token| GC
   STATE --> API
-  STATE -.->|planned| BOT -.-> Teams
+  STATE --> BOT
+  BOT <-->|Bot Framework| Teams
   REC --> GC
   CORE --> QUEUE --> OB -.->|HTTP 403 in live tests| Teams
   IN --> AUDIT
 ```
 
-Dashed arrows and the node marked "not implemented" show what is planned or does not work on the tested tenant; solid arrows were run live (reconciliation and push).
+The dashed arrow shows what does not work on the tested tenant (activity feed); solid arrows were run live (reconciliation, push and the Teams bot).
 
-Three layers: **Host** (HTTP, background services; the bot is planned) → **Infrastructure** (EF Core 8 + SQLite, queues, Graph client, subscriptions, reconciliation) → **Core** (pure functions, no I/O).
+Three layers: **Host** (HTTP, background services, Teams bot) → **Infrastructure** (EF Core 8 + SQLite, queues, Graph client, subscriptions, reconciliation) → **Core** (pure functions, no I/O).
 
 ## 3. Processing of a notification
 
@@ -92,10 +93,12 @@ Rules implemented by the Core (`src/TeamsCallRecords.Core`):
 | --- | --- | --- |
 | POST | `/graph/notify` | Graph validation token / clientState check |
 | POST | `/graph/lifecycle` | subscription lifecycle events |
-| POST | `/api/messages` | Bot Framework JWT. **Planned, not implemented** (no Teams bot in v0.1.0) |
+| POST | `/api/messages` | Bot Framework token, validated by the Teams SDK (401 without a valid token). Added after v0.1.0 |
 | GET | `/api/cdr` | `X-TCRI-Key` |
 | POST | `/api/reprocess` | `X-TCRI-Key` (durable job, `202`) |
 | GET | `/api/status`, `/health/live`, `/health/ready` | key / open health |
+
+The bot (`Host/Bot`) is a thin layer on the Teams SDK (`Microsoft.Teams.Apps` 2.1.1). `TcriBot` hands the text of a message to `BotCommands`, which has no SDK types, reads the day's statistics through `ICdrReader.GetStatsAsync` and returns a text. "Today" is the local day in `Bot:TimeZoneId` (default `Europe/Kyiv`), converted to a UTC range `[local midnight, next local midnight)`, so a daylight saving day is 23 or 25 hours long. The count is the number of distinct call ids among the CDRs that started in the range, and the duration is the sum over those CDRs (sessions). The bot never calls Graph: it shows only what is already in the database.
 
 ## 6. Failure model
 
@@ -108,9 +111,9 @@ Rules implemented by the Core (`src/TeamsCallRecords.Core`):
 
 | Level | Meaning | Today |
 | --- | --- | --- |
-| Synthetic verified | unit and integration tests plus the golden examples G01–G11 pass | 490 automated tests, none uses the network; GitHub Actions runs them on every push and pull request |
-| Live verified | real Graph app-only token, subscriptions, real call records | Done on 2026-10-25 on one trial tenant, one-to-one audio calls: test 1 (reconciliation) and test 2 (push through a subscription created by the Host). Evidence and limits: [LIVE_TEST_PROTOCOL.md](LIVE_TEST_PROTOCOL.md) |
-| Not live verified | subscription renewal and lifecycle events, RSC, Teams bot, activity feed | Renewal and lifecycle events: automated tests only. Teams bot: not implemented. Activity feed: HTTP 403 in both live tests, cause not investigated |
+| Synthetic verified | unit and integration tests plus the golden examples G01–G11 pass | 507 automated tests, none uses the network; GitHub Actions runs them on every push and pull request |
+| Live verified | real Graph app-only token, subscriptions, real call records | Done on one trial tenant, one-to-one audio calls: test 1 (reconciliation) and test 2 (push through a subscription created by the Host) on 2026-10-25, test 3 (Teams bot in a personal chat, with a real call) on 2026-10-26. Evidence and limits: [LIVE_TEST_PROTOCOL.md](LIVE_TEST_PROTOCOL.md) |
+| Not live verified | subscription renewal and lifecycle events, RSC, Teams bot in group chats and channels, activity feed | Renewal and lifecycle events: automated tests only. Teams bot: tested in one personal chat only; signed-token authentication cases are not covered by automated tests. Activity feed: HTTP 403 in all live tests, cause not investigated |
 
 The project never reports a result that was not produced.
 
@@ -119,4 +122,4 @@ The project never reports a result that was not produced.
 1. Core (F6) — implemented.
 2. Infrastructure — EF Core + SQLite, queues, Graph client, subscription management (ADR-0001) — implemented.
 3. Host — webhook, REST, health — implemented.
-4. Live tenant — reconciliation and push verified (v0.1.0); open: activity-feed 403, Teams bot, observing renewal and lifecycle events live, group and PSTN calls.
+4. Live tenant — reconciliation and push verified (v0.1.0), Teams bot verified in a personal chat (test 3, unreleased); open: activity-feed 403, signed-token tests for the bot, bot in group chats and channels, observing renewal and lifecycle events live, group and PSTN calls.
