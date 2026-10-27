@@ -28,6 +28,8 @@ bash demo/demo.sh
 
 The script expects the Host at `http://localhost:60049` (the default launch profile). What it does and what it does not cover is described in [Demo](#demo). For a real Microsoft 365 tenant see [Live mode](#live-mode) and the [live setup guide](docs/LIVE_SETUP.md).
 
+The Quick start was run from a fresh `git clone` of `main` on Windows (Git Bash) on 2026-10-27: the Host built and started, and all eight steps of `demo/demo.sh` gave the documented results (403 for the wrong `clientState`, 202 for the right one, one CDR, two in-memory activity notifications, `"mode": "demo"`, 401 without the key).
+
 ## Verified live / not yet verified
 
 | Capability | State | Evidence |
