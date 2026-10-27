@@ -1,9 +1,51 @@
 # Teams Call Records Integration (TCRI)
 
+[![ci](https://github.com/Andrii-Nikolaiev/teams-call-records-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/Andrii-Nikolaiev/teams-call-records-integration/actions/workflows/ci.yml)
+![.NET 8](https://img.shields.io/badge/.NET-8-512BD4)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Status: engineering prototype](https://img.shields.io/badge/status-engineering%20prototype-orange)
+
 Open-source integration that reads Microsoft Teams call records through Microsoft Graph (Entra ID, app-only), converts every call session into a CDR, stores the result in SQLite and exposes it through a REST API. Calls reach the system by two routes: Graph change notifications (push) and periodic reconciliation. A Teams bot answers two text commands (`help`, `calls today`); activity feed notifications to users are implemented but did not work on the tested tenant. See the status below. C# / .NET 8.
 
 > **Status: engineering prototype (v0.2.0). Not production-ready.**
 > The core, data layer, processing pipeline, Graph client, subscription management and HTTP interface are implemented. They run in demo mode with an in-memory Graph stand-in, or against a live Microsoft 365 tenant (`Graph:Mode=Live`). Both ingestion routes have been verified end to end with real Teams calls on a trial tenant: periodic reconciliation (test 1) and Graph push notifications through a subscription created by the Host itself (test 2). The Teams bot (`help`, `calls today`, added in v0.2.0) was then verified in the same tenant with a real call and real Teams messages (test 3). See the [live test protocol](docs/LIVE_TEST_PROTOCOL.md). Activity feed delivery failed in every test; see the limitations below.
+
+## Quick start (no Microsoft 365 needed)
+
+The demo runs the whole pipeline with an in-memory stand-in for Microsoft Graph. Requires the .NET 8 SDK, Git, and `bash`, `curl` and GNU `date` (Git Bash on Windows is fine).
+
+```
+git clone https://github.com/Andrii-Nikolaiev/teams-call-records-integration.git
+cd teams-call-records-integration
+dotnet run --project src/TeamsCallRecords.Host
+```
+
+In a second terminal, in the same folder:
+
+```
+bash demo/demo.sh
+```
+
+The script expects the Host at `http://localhost:60049` (the default launch profile). What it does and what it does not cover is described in [Demo](#demo). For a real Microsoft 365 tenant see [Live mode](#live-mode) and the [live setup guide](docs/LIVE_SETUP.md).
+
+## Verified live / not yet verified
+
+| Capability | State | Evidence |
+| --- | --- | --- |
+| Reading call records from Microsoft Graph (periodic reconciliation) | Verified live | Test 1 |
+| Graph push notifications, subscription created by the Host | Verified live | Tests 2 and 3 |
+| One CDR per call session, stored in SQLite, returned by `GET /api/cdr` | Verified live | Tests 1 to 3 |
+| Teams bot: `help` and `calls today` in a personal chat | Verified live | Test 3 |
+| Activity feed notifications to users | Not working | HTTP 403 in all three tests |
+| Subscription renewal and lifecycle notifications | Not verified live | Automated tests with a fake Graph client only |
+| Bot in group chats and channels, other users, RSC | Not tested | |
+| Group calls, video, PSTN, failed or missed calls, load | Not tested | |
+
+![The TCRI bot answers "calls today" in a Teams personal chat](docs/figures/teams-bot-calls-today.png)
+
+*The bot in a personal Teams chat after a real one-to-one call of 2 min 59 s (live test 3, 2026-10-26). The Teams interface is in Russian.*
+
+Details, dates and limits: [live test protocol](docs/LIVE_TEST_PROTOCOL.md) and [Known limitations](#known-limitations).
 
 ## What works now
 
@@ -33,7 +75,7 @@ Three tests against a Microsoft 365 Business Basic trial tenant, with real Teams
 ### Known limitations
 
 - **Teams bot:** tested in one personal chat with one user (the tenant administrator) on one trial tenant, through ngrok. Group chats, channels, other users and RSC were not tested. Automated tests cover three unauthenticated requests to `/api/messages` (all answered 401); signed-token cases (bad signature, wrong audience, expired, valid) are not covered by automated tests. Answers are in English only. The bot reads the local database, so `calls today` shows a call only after it has been ingested (about 12 to 21 minutes after the end of a call in the live tests).
-- **Activity feed notifications to users:** the sender is implemented, but in all three live tests the requests returned HTTP 403 and the outbox rows ended in state `failed`. The cause was not investigated.
+- **Activity feed notifications to users:** the sender is implemented, but in all three live tests the requests returned HTTP 403 and the outbox rows ended in state `failed`. The HTTP 403 is under investigation. A configuration review found that the application has no activity notification permission and that the Teams app manifest declares no activities; the exact root cause has not yet been confirmed.
 - **Not observed on a real tenant:** subscription renewal, `reauthorizationRequired`, `subscriptionRemoved` and `missed` notifications (automated tests with a fake Graph client only).
 - **Tunnel:** Microsoft Dev Tunnels, named in ADR-0001, was not run; the push test used ngrok. A changed notification address requires removing the old subscription first (see [live setup](docs/LIVE_SETUP.md)).
 - **Scope of testing:** one trial tenant, one-to-one audio calls only. Group calls, video or screen sharing, PSTN, failed or missed calls, paging through `@odata.nextLink` with real data, load and reliability were not tested.
@@ -64,19 +106,9 @@ Pure functions with no network and no database.
 
 ## Demo
 
-The Host runs without Microsoft 365: Microsoft Graph is replaced by an in-memory stand-in, so one synthetic call can go through the whole pipeline.
+The Host runs without Microsoft 365: Microsoft Graph is replaced by an in-memory stand-in, so one synthetic call can go through the whole pipeline. The commands are in the [Quick start](#quick-start-no-microsoft-365-needed).
 
-```
-dotnet run --project src/TeamsCallRecords.Host
-```
-
-In a second terminal (Git Bash; needs `bash`, `curl`, GNU `date`):
-
-```
-bash demo/demo.sh
-```
-
-The script puts a synthetic call record into the stand-in, sends a Graph-style change notification (first with a wrong `clientState`, which is rejected, then a correct one), and shows the resulting CDR (`GET /api/cdr`), the activity notification that was "sent" (`GET /demo/notifications`) and the queue status (`GET /api/status`, `"mode": "demo"`).
+The script `demo/demo.sh` puts a synthetic call record into the stand-in, sends a Graph-style change notification (first with a wrong `clientState`, which is rejected, then a correct one), and shows the resulting CDR (`GET /api/cdr`), the activity notification that was "sent" (`GET /demo/notifications`) and the queue status (`GET /api/status`, `"mode": "demo"`).
 
 What the demo is not:
 
